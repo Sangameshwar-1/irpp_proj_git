@@ -30,7 +30,8 @@ source /opt/ros/jazzy/setup.bash
 
 # Define workspace and project paths
 WORKSPACE_DIR=~/ros2_ws
-PROJECT_DIR=/home/sangam/Documents/Acad/sem-4/IRPP/PROJ
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$SCRIPT_DIR"
 PROJECT_SOURCE_DIR=$PROJECT_DIR/scan_project/human_models/ros_humans_ros2
 RVIZ_CONFIG=$PROJECT_DIR/scan_project/rviz_config.rviz
 

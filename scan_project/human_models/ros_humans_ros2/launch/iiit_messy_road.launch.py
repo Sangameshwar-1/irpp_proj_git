@@ -15,12 +15,15 @@ from launch.substitutions import LaunchConfiguration
 
 
 def generate_launch_description():
-    # Path to the world file
-    world_file = '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/scan_project/gazebo_worlds/iiit_messy_road.world'
+    # Get package share directory for world files
+    pkg_share = get_package_share_directory('ros_humans_ros2')
+    world_file = os.path.join(pkg_share, 'worlds', 'iiit_messy_road.world')
     
     # Get ros_gz_sim launch file
     ros_gz_sim_share = get_package_share_directory('ros_gz_sim')
     gz_sim_launch = os.path.join(ros_gz_sim_share, 'launch', 'gz_sim.launch.py')
+    
+    world = LaunchConfiguration('world')
     
     return LaunchDescription([
         # Declare arguments
@@ -34,7 +37,7 @@ def generate_launch_description():
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(gz_sim_launch),
             launch_arguments={
-                'gz_args': ['-r ', world_file],
+                'gz_args': ['-r ', world],
             }.items(),
         ),
         

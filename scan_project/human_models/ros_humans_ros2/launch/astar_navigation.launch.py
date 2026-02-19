@@ -17,6 +17,10 @@ def generate_launch_description():
     """
     world = LaunchConfiguration("world")
 
+    # Get package share directory for world files
+    pkg_share = get_package_share_directory("ros_humans_ros2")
+    default_world = os.path.join(pkg_share, "worlds", "large_messy_room.world")
+
     gazebo_launch = os.path.join(
         get_package_share_directory("ros_gz_sim"),
         "launch",
@@ -29,7 +33,7 @@ def generate_launch_description():
         
         DeclareLaunchArgument(
             "world",
-            default_value="/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/scan_project/gazebo_worlds/large_messy_room.world",
+            default_value=default_world,
             description="Gazebo world file",
         ),
         IncludeLaunchDescription(

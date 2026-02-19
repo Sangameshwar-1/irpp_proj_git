@@ -12,10 +12,14 @@ from ament_index_python.packages import get_package_share_directory
 
 
 def generate_launch_description():
+    # Get package share directory for world files
+    pkg_share = get_package_share_directory("ros_humans_ros2")
+    default_world = os.path.join(pkg_share, "worlds", "messy_road.world")
+
     # Declare launch arguments
     world_arg = DeclareLaunchArgument(
         'world',
-        default_value='/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/scan_project/gazebo_worlds/messy_road.world',
+        default_value=default_world,
         description='Path to Gazebo world file'
     )
     

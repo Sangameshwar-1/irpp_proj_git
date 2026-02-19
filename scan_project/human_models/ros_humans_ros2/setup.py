@@ -1,4 +1,6 @@
 from setuptools import setup
+import os
+from glob import glob
 
 package_name = "ros_humans_ros2"
 
@@ -15,6 +17,7 @@ setup(
             "launch/iiit_messy_road.launch.py",
             "launch/astar_navigation.launch.py",
         ]),
+        ("share/" + package_name + "/worlds", glob("worlds/*.world")),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
