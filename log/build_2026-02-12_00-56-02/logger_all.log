@@ -1,0 +1,173 @@
+[0.352s] DEBUG:colcon:Command line arguments: ['/usr/bin/colcon', 'build', '--symlink-install']
+[0.353s] DEBUG:colcon:Parsed command line arguments: Namespace(log_base=None, log_level=None, verb_name='build', build_base='build', install_base='install', merge_install=False, symlink_install=True, test_result_base=None, continue_on_error=False, executor='parallel', parallel_workers=12, event_handlers=None, ignore_user_meta=False, metas=['./colcon.meta'], base_paths=['.'], packages_ignore=None, packages_ignore_regex=None, paths=None, packages_up_to=None, packages_up_to_regex=None, packages_above=None, packages_above_and_dependencies=None, packages_above_depth=None, packages_select_by_dep=None, packages_skip_by_dep=None, packages_skip_up_to=None, packages_select_build_failed=False, packages_skip_build_finished=False, packages_select_test_failures=False, packages_skip_test_passed=False, packages_select=None, packages_skip=None, packages_select_regex=None, packages_skip_regex=None, packages_start=None, packages_end=None, allow_overriding=[], cmake_args=None, cmake_target=None, cmake_target_skip_unavailable=False, cmake_clean_cache=False, cmake_clean_first=False, cmake_force_configure=False, ament_cmake_args=None, catkin_cmake_args=None, catkin_skip_building_tests=False, mixin_files=None, mixin=None, verb_parser=<colcon_mixin.mixin.mixin_argument.MixinArgumentDecorator object at 0x713bfc361fa0>, verb_extension=<colcon_core.verb.build.BuildVerb object at 0x713bfc4be1b0>, main=<bound method BuildVerb.main of <colcon_core.verb.build.BuildVerb object at 0x713bfc4be1b0>>, mixin_verb=('build',))
+[0.477s] Level 1:colcon.colcon_core.package_discovery:discover_packages(colcon_meta) check parameters
+[0.477s] Level 1:colcon.colcon_core.package_discovery:discover_packages(recursive) check parameters
+[0.477s] Level 1:colcon.colcon_core.package_discovery:discover_packages(ignore) check parameters
+[0.477s] Level 1:colcon.colcon_core.package_discovery:discover_packages(path) check parameters
+[0.477s] Level 1:colcon.colcon_core.package_discovery:discover_packages(colcon_meta) discover
+[0.478s] Level 1:colcon.colcon_core.package_discovery:discover_packages(recursive) discover
+[0.478s] INFO:colcon.colcon_core.package_discovery:Crawling recursively for packages in '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ'
+[0.478s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['ignore', 'ignore_ament_install']
+[0.478s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'ignore'
+[0.478s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'ignore_ament_install'
+[0.478s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['colcon_pkg']
+[0.478s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'colcon_pkg'
+[0.478s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['colcon_meta']
+[0.478s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'colcon_meta'
+[0.478s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['ros']
+[0.478s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'ros'
+[0.533s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['cmake', 'python']
+[0.534s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'cmake'
+[0.534s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'python'
+[0.534s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['python_setup_py']
+[0.534s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'python_setup_py'
+[0.534s] Level 1:colcon.colcon_core.package_identification:_identify(build) by extensions ['ignore', 'ignore_ament_install']
+[0.534s] Level 1:colcon.colcon_core.package_identification:_identify(build) by extension 'ignore'
+[0.534s] Level 1:colcon.colcon_core.package_identification:_identify(build) ignored
+[0.534s] Level 1:colcon.colcon_core.package_identification:_identify(install) by extensions ['ignore', 'ignore_ament_install']
+[0.535s] Level 1:colcon.colcon_core.package_identification:_identify(install) by extension 'ignore'
+[0.535s] Level 1:colcon.colcon_core.package_identification:_identify(install) ignored
+[0.535s] Level 1:colcon.colcon_core.package_identification:_identify(log) by extensions ['ignore', 'ignore_ament_install']
+[0.535s] Level 1:colcon.colcon_core.package_identification:_identify(log) by extension 'ignore'
+[0.535s] Level 1:colcon.colcon_core.package_identification:_identify(log) ignored
+[0.535s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project) by extensions ['ignore', 'ignore_ament_install']
+[0.535s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project) by extension 'ignore'
+[0.535s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project) by extension 'ignore_ament_install'
+[0.535s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project) by extensions ['colcon_pkg']
+[0.535s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project) by extension 'colcon_pkg'
+[0.535s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project) by extensions ['colcon_meta']
+[0.535s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project) by extension 'colcon_meta'
+[0.536s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project) by extensions ['ros']
+[0.536s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project) by extension 'ros'
+[0.536s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project) by extensions ['cmake', 'python']
+[0.536s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project) by extension 'cmake'
+[0.536s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project) by extension 'python'
+[0.536s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project) by extensions ['python_setup_py']
+[0.536s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project) by extension 'python_setup_py'
+[0.536s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/gazebo_worlds) by extensions ['ignore', 'ignore_ament_install']
+[0.536s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/gazebo_worlds) by extension 'ignore'
+[0.536s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/gazebo_worlds) by extension 'ignore_ament_install'
+[0.536s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/gazebo_worlds) by extensions ['colcon_pkg']
+[0.536s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/gazebo_worlds) by extension 'colcon_pkg'
+[0.536s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/gazebo_worlds) by extensions ['colcon_meta']
+[0.536s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/gazebo_worlds) by extension 'colcon_meta'
+[0.536s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/gazebo_worlds) by extensions ['ros']
+[0.537s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/gazebo_worlds) by extension 'ros'
+[0.537s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/gazebo_worlds) by extensions ['cmake', 'python']
+[0.537s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/gazebo_worlds) by extension 'cmake'
+[0.537s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/gazebo_worlds) by extension 'python'
+[0.537s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/gazebo_worlds) by extensions ['python_setup_py']
+[0.537s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/gazebo_worlds) by extension 'python_setup_py'
+[0.537s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models) by extensions ['ignore', 'ignore_ament_install']
+[0.537s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models) by extension 'ignore'
+[0.537s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models) by extension 'ignore_ament_install'
+[0.537s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models) by extensions ['colcon_pkg']
+[0.537s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models) by extension 'colcon_pkg'
+[0.538s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models) by extensions ['colcon_meta']
+[0.538s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models) by extension 'colcon_meta'
+[0.538s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models) by extensions ['ros']
+[0.538s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models) by extension 'ros'
+[0.538s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models) by extensions ['cmake', 'python']
+[0.538s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models) by extension 'cmake'
+[0.538s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models) by extension 'python'
+[0.538s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models) by extensions ['python_setup_py']
+[0.538s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models) by extension 'python_setup_py'
+[0.538s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models/ros_humans) by extensions ['ignore', 'ignore_ament_install']
+[0.538s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models/ros_humans) by extension 'ignore'
+[0.538s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models/ros_humans) by extension 'ignore_ament_install'
+[0.538s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models/ros_humans) by extensions ['colcon_pkg']
+[0.539s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models/ros_humans) by extension 'colcon_pkg'
+[0.539s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models/ros_humans) by extensions ['colcon_meta']
+[0.539s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models/ros_humans) by extension 'colcon_meta'
+[0.539s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models/ros_humans) by extensions ['ros']
+[0.539s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models/ros_humans) by extension 'ros'
+[0.548s] DEBUG:colcon.colcon_core.package_identification:Package 'scan_project/human_models/ros_humans' with type 'ros.catkin' and name 'ros_humans'
+[0.548s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models/ros_humans_ros2) by extensions ['ignore', 'ignore_ament_install']
+[0.548s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models/ros_humans_ros2) by extension 'ignore'
+[0.549s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models/ros_humans_ros2) by extension 'ignore_ament_install'
+[0.549s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models/ros_humans_ros2) by extensions ['colcon_pkg']
+[0.549s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models/ros_humans_ros2) by extension 'colcon_pkg'
+[0.549s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models/ros_humans_ros2) by extensions ['colcon_meta']
+[0.549s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models/ros_humans_ros2) by extension 'colcon_meta'
+[0.549s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models/ros_humans_ros2) by extensions ['ros']
+[0.549s] Level 1:colcon.colcon_core.package_identification:_identify(scan_project/human_models/ros_humans_ros2) by extension 'ros'
+[0.551s] DEBUG:colcon.colcon_core.package_identification:Package 'scan_project/human_models/ros_humans_ros2' with type 'ros.ament_python' and name 'ros_humans_ros2'
+[0.552s] Level 1:colcon.colcon_core.package_discovery:discover_packages(recursive) using defaults
+[0.552s] Level 1:colcon.colcon_core.package_discovery:discover_packages(ignore) discover
+[0.552s] Level 1:colcon.colcon_core.package_discovery:discover_packages(ignore) using defaults
+[0.552s] Level 1:colcon.colcon_core.package_discovery:discover_packages(path) discover
+[0.552s] Level 1:colcon.colcon_core.package_discovery:discover_packages(path) using defaults
+[0.596s] Level 1:colcon.colcon_core.package_discovery:discover_packages(prefix_path) check parameters
+[0.596s] Level 1:colcon.colcon_core.package_discovery:discover_packages(prefix_path) discover
+[0.605s] DEBUG:colcon.colcon_installed_package_information.package_discovery:Found 390 installed packages in /opt/ros/jazzy
+[0.612s] Level 1:colcon.colcon_core.package_discovery:discover_packages(prefix_path) using defaults
+[0.798s] Level 5:colcon.colcon_core.verb:set package 'ros_humans' build argument 'cmake_args' from command line to 'None'
+[0.798s] Level 5:colcon.colcon_core.verb:set package 'ros_humans' build argument 'cmake_target' from command line to 'None'
+[0.798s] Level 5:colcon.colcon_core.verb:set package 'ros_humans' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.798s] Level 5:colcon.colcon_core.verb:set package 'ros_humans' build argument 'cmake_clean_cache' from command line to 'False'
+[0.798s] Level 5:colcon.colcon_core.verb:set package 'ros_humans' build argument 'cmake_clean_first' from command line to 'False'
+[0.799s] Level 5:colcon.colcon_core.verb:set package 'ros_humans' build argument 'cmake_force_configure' from command line to 'False'
+[0.799s] Level 5:colcon.colcon_core.verb:set package 'ros_humans' build argument 'ament_cmake_args' from command line to 'None'
+[0.799s] Level 5:colcon.colcon_core.verb:set package 'ros_humans' build argument 'catkin_cmake_args' from command line to 'None'
+[0.799s] Level 5:colcon.colcon_core.verb:set package 'ros_humans' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.799s] DEBUG:colcon.colcon_core.verb:Building package 'ros_humans' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/build/ros_humans', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans', 'merge_install': False, 'path': '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/scan_project/human_models/ros_humans', 'symlink_install': True, 'test_result_base': None}
+[0.800s] Level 5:colcon.colcon_core.verb:set package 'ros_humans_ros2' build argument 'cmake_args' from command line to 'None'
+[0.800s] Level 5:colcon.colcon_core.verb:set package 'ros_humans_ros2' build argument 'cmake_target' from command line to 'None'
+[0.800s] Level 5:colcon.colcon_core.verb:set package 'ros_humans_ros2' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.801s] Level 5:colcon.colcon_core.verb:set package 'ros_humans_ros2' build argument 'cmake_clean_cache' from command line to 'False'
+[0.801s] Level 5:colcon.colcon_core.verb:set package 'ros_humans_ros2' build argument 'cmake_clean_first' from command line to 'False'
+[0.801s] Level 5:colcon.colcon_core.verb:set package 'ros_humans_ros2' build argument 'cmake_force_configure' from command line to 'False'
+[0.801s] Level 5:colcon.colcon_core.verb:set package 'ros_humans_ros2' build argument 'ament_cmake_args' from command line to 'None'
+[0.801s] Level 5:colcon.colcon_core.verb:set package 'ros_humans_ros2' build argument 'catkin_cmake_args' from command line to 'None'
+[0.801s] Level 5:colcon.colcon_core.verb:set package 'ros_humans_ros2' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.801s] DEBUG:colcon.colcon_core.verb:Building package 'ros_humans_ros2' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/build/ros_humans_ros2', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2', 'merge_install': False, 'path': '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/scan_project/human_models/ros_humans_ros2', 'symlink_install': True, 'test_result_base': None}
+[0.801s] INFO:colcon.colcon_core.executor:Executing jobs using 'parallel' executor
+[0.803s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:run_until_complete
+[0.804s] INFO:colcon.colcon_ros.task.catkin.build:Building ROS package in '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/scan_project/human_models/ros_humans' with build type 'catkin'
+[0.804s] INFO:colcon.colcon_cmake.task.cmake.build:Building CMake package in '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/scan_project/human_models/ros_humans'
+[0.814s] INFO:colcon.colcon_core.plugin_system:Skipping extension 'colcon_core.shell.bat': Not used on non-Windows systems
+[0.815s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.815s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[0.825s] INFO:colcon.colcon_ros.task.ament_python.build:Building ROS package in '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/scan_project/human_models/ros_humans_ros2' with build type 'ament_python'
+[0.826s] Level 1:colcon.colcon_core.shell:create_environment_hook('ros_humans_ros2', 'ament_prefix_path')
+[0.827s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/share/ros_humans_ros2/hook/ament_prefix_path.ps1'
+[0.830s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/share/ros_humans_ros2/hook/ament_prefix_path.dsv'
+[0.832s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/share/ros_humans_ros2/hook/ament_prefix_path.sh'
+[0.834s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.834s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[0.852s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/build/ros_humans': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/scan_project/human_models/ros_humans -DCATKIN_INSTALL_INTO_PREFIX_ROOT=0 -DCATKIN_SYMLINK_INSTALL=ON -DCMAKE_INSTALL_PREFIX=/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans
+[1.566s] INFO:colcon.colcon_core.task.python.build:Building Python package in '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/scan_project/human_models/ros_humans_ros2'
+[1.567s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[1.567s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[2.184s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/build/ros_humans' returned '1': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/scan_project/human_models/ros_humans -DCATKIN_INSTALL_INTO_PREFIX_ROOT=0 -DCATKIN_SYMLINK_INSTALL=ON -DCMAKE_INSTALL_PREFIX=/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans
+[2.210s] Level 1:colcon.colcon_core.environment:create_environment_scripts_only(ros_humans)
+[2.230s] Level 1:colcon.colcon_core.environment:checking '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans' for CMake module files
+[2.231s] Level 1:colcon.colcon_core.environment:checking '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans' for CMake config files
+[2.232s] Level 1:colcon.colcon_core.environment:checking '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans/bin'
+[2.232s] Level 1:colcon.colcon_core.environment:checking '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans/lib/pkgconfig/ros_humans.pc'
+[2.233s] Level 1:colcon.colcon_core.environment:checking '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans/lib/python3.12/site-packages'
+[2.233s] Level 1:colcon.colcon_core.environment:checking '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans/bin'
+[2.234s] INFO:colcon.colcon_core.shell:Creating package script '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans/share/ros_humans/package.ps1'
+[2.236s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans/share/ros_humans/package.dsv'
+[2.237s] INFO:colcon.colcon_core.shell:Creating package script '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans/share/ros_humans/package.sh'
+[2.239s] INFO:colcon.colcon_core.shell:Creating package script '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans/share/ros_humans/package.bash'
+[2.240s] INFO:colcon.colcon_core.shell:Creating package script '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans/share/ros_humans/package.zsh'
+[2.243s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans/share/colcon-core/packages/ros_humans)
+[3.115s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:closing loop
+[3.116s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:loop closed
+[3.116s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:run_until_complete finished with '1'
+[3.116s] DEBUG:colcon.colcon_core.event_reactor:joining thread
+[3.149s] INFO:colcon.colcon_core.plugin_system:Skipping extension 'colcon_notification.desktop_notification.terminal_notifier': Not used on non-Darwin systems
+[3.149s] INFO:colcon.colcon_core.plugin_system:Skipping extension 'colcon_notification.desktop_notification.win32': Not used on non-Windows systems
+[3.149s] INFO:colcon.colcon_notification.desktop_notification:Sending desktop notification using 'notify2'
+[3.194s] DEBUG:colcon.colcon_core.event_reactor:joined thread
+[3.195s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/local_setup.ps1'
+[3.197s] INFO:colcon.colcon_core.shell:Creating prefix util module '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/_local_setup_util_ps1.py'
+[3.200s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/setup.ps1'
+[3.202s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/local_setup.sh'
+[3.203s] INFO:colcon.colcon_core.shell:Creating prefix util module '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/_local_setup_util_sh.py'
+[3.205s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/setup.sh'
+[3.208s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/local_setup.bash'
+[3.209s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/setup.bash'
+[3.211s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/local_setup.zsh'
+[3.213s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/setup.zsh'

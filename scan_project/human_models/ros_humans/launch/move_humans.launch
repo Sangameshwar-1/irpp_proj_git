@@ -1,0 +1,5 @@
+<launch>
+  <node pkg="ros_humans" type="move_humans.py" name="move_humans" output="screen">
+    <param name="rate" value="10.0" />
+  </node>
+</launch>

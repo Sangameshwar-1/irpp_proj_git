@@ -1,0 +1,31 @@
+[1.239s] Invoking command in '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/build/ros_humans_ros2': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/build/ros_humans_ros2/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/build/ros_humans_ros2/build --no-deps symlink_data --force
+[1.718s] running develop
+[1.967s] running egg_info
+[1.993s] writing ros_humans_ros2.egg-info/PKG-INFO
+[1.993s] writing dependency_links to ros_humans_ros2.egg-info/dependency_links.txt
+[1.993s] writing entry points to ros_humans_ros2.egg-info/entry_points.txt
+[1.993s] writing requirements to ros_humans_ros2.egg-info/requires.txt
+[1.994s] writing top-level names to ros_humans_ros2.egg-info/top_level.txt
+[2.057s] reading manifest file 'ros_humans_ros2.egg-info/SOURCES.txt'
+[2.059s] writing manifest file 'ros_humans_ros2.egg-info/SOURCES.txt'
+[2.097s] running build_ext
+[2.098s] Creating /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/lib/python3.12/site-packages/ros-humans-ros2.egg-link (link to .)
+[2.101s] Installing astar_path_planner script to /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/lib/ros_humans_ros2
+[2.102s] Installing camera_view_360 script to /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/lib/ros_humans_ros2
+[2.103s] Installing iiit_messy_road_mover script to /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/lib/ros_humans_ros2
+[2.103s] Installing messy_road_mover script to /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/lib/ros_humans_ros2
+[2.104s] Installing messy_road_pose_publisher script to /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/lib/ros_humans_ros2
+[2.104s] Installing move_humans script to /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/lib/ros_humans_ros2
+[2.104s] Installing pointcloud_mapper script to /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/lib/ros_humans_ros2
+[2.105s] Installing publish_human_pose script to /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/lib/ros_humans_ros2
+[2.105s] Installing rover_explorer script to /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/lib/ros_humans_ros2
+[2.105s] 
+[2.105s] Installed /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/build/ros_humans_ros2
+[2.105s] running symlink_data
+[2.106s] symbolically linking /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/build/ros_humans_ros2/resource/ros_humans_ros2 -> /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/share/ament_index/resource_index/packages
+[2.106s] symbolically linking /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/build/ros_humans_ros2/package.xml -> /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/share/ros_humans_ros2
+[2.106s] symbolically linking /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/build/ros_humans_ros2/launch/demo.launch.py -> /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/share/ros_humans_ros2/launch
+[2.106s] symbolically linking /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/build/ros_humans_ros2/launch/messy_road.launch.py -> /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/share/ros_humans_ros2/launch
+[2.107s] symbolically linking /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/build/ros_humans_ros2/launch/iiit_messy_road.launch.py -> /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/share/ros_humans_ros2/launch
+[2.107s] error: [Errno 2] No such file or directory: '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/share/ros_humans_ros2/launch/astar_navigation.launch.py'
+[2.170s] Invoked command in '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/build/ros_humans_ros2' returned '1': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/build/ros_humans_ros2/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/build/ros_humans_ros2/build --no-deps symlink_data --force

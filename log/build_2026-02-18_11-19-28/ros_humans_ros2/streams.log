@@ -1,0 +1,28 @@
+[1.252s] Invoking command in '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/scan_project/human_models/ros_humans_ros2': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/build/ros_humans_ros2/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../../build/ros_humans_ros2 build --build-base /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/build/ros_humans_ros2/build install --record /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/build/ros_humans_ros2/install.log --single-version-externally-managed install_data
+[1.716s] running egg_info
+[1.750s] writing ../../../build/ros_humans_ros2/ros_humans_ros2.egg-info/PKG-INFO
+[1.750s] writing dependency_links to ../../../build/ros_humans_ros2/ros_humans_ros2.egg-info/dependency_links.txt
+[1.751s] writing entry points to ../../../build/ros_humans_ros2/ros_humans_ros2.egg-info/entry_points.txt
+[1.751s] writing requirements to ../../../build/ros_humans_ros2/ros_humans_ros2.egg-info/requires.txt
+[1.751s] writing top-level names to ../../../build/ros_humans_ros2/ros_humans_ros2.egg-info/top_level.txt
+[1.823s] reading manifest file '../../../build/ros_humans_ros2/ros_humans_ros2.egg-info/SOURCES.txt'
+[1.826s] writing manifest file '../../../build/ros_humans_ros2/ros_humans_ros2.egg-info/SOURCES.txt'
+[1.826s] running build
+[1.826s] running build_py
+[1.826s] copying ros_humans_ros2/iiit_messy_road_mover.py -> /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/build/ros_humans_ros2/build/lib/ros_humans_ros2
+[1.827s] running install
+[1.838s] running install_lib
+[1.863s] copying /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/build/ros_humans_ros2/build/lib/ros_humans_ros2/iiit_messy_road_mover.py -> /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/lib/python3.12/site-packages/ros_humans_ros2
+[1.864s] byte-compiling /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/lib/python3.12/site-packages/ros_humans_ros2/iiit_messy_road_mover.py to iiit_messy_road_mover.cpython-312.pyc
+[1.875s] running install_data
+[1.875s] running install_egg_info
+[1.911s] removing '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/lib/python3.12/site-packages/ros_humans_ros2-0.1.0-py3.12.egg-info' (and everything under it)
+[1.911s] Copying ../../../build/ros_humans_ros2/ros_humans_ros2.egg-info to /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/lib/python3.12/site-packages/ros_humans_ros2-0.1.0-py3.12.egg-info
+[1.915s] running install_scripts
+[2.139s] Installing iiit_messy_road_mover script to /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/lib/ros_humans_ros2
+[2.140s] Installing messy_road_mover script to /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/lib/ros_humans_ros2
+[2.140s] Installing messy_road_pose_publisher script to /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/lib/ros_humans_ros2
+[2.140s] Installing move_humans script to /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/lib/ros_humans_ros2
+[2.140s] Installing publish_human_pose script to /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/lib/ros_humans_ros2
+[2.140s] writing list of installed files to '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/build/ros_humans_ros2/install.log'
+[2.189s] Invoked command in '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/scan_project/human_models/ros_humans_ros2' returned '0': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/build/ros_humans_ros2/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans_ros2/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../../build/ros_humans_ros2 build --build-base /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/build/ros_humans_ros2/build install --record /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/build/ros_humans_ros2/install.log --single-version-externally-managed install_data

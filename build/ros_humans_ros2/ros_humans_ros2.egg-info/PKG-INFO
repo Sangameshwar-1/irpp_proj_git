@@ -1,0 +1,7 @@
+Metadata-Version: 2.1
+Name: ros-humans-ros2
+Version: 0.1.0
+Summary: ROS 2 human pose publisher and mover with messy road simulation.
+Maintainer: scan-project
+Maintainer-email: user@example.com
+License: MIT

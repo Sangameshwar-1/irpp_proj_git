@@ -1,0 +1,40 @@
+[0.047s] Invoking command in '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/build/ros_humans': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/scan_project/human_models/ros_humans -DCATKIN_INSTALL_INTO_PREFIX_ROOT=0 -DCATKIN_SYMLINK_INSTALL=ON -DCMAKE_INSTALL_PREFIX=/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans
+[0.117s] [0mCMake Deprecation Warning at CMakeLists.txt:1 (cmake_minimum_required):
+[0.118s]   Compatibility with CMake < 3.5 will be removed from a future version of
+[0.118s]   CMake.
+[0.118s] 
+[0.119s]   Update the VERSION argument <min> value or use a ...<max> suffix to tell
+[0.119s]   CMake that the project does not need compatibility with older versions.
+[0.119s] 
+[0.120s] [0m
+[0.401s] -- The C compiler identification is GNU 13.3.0
+[0.663s] -- The CXX compiler identification is GNU 13.3.0
+[0.714s] -- Detecting C compiler ABI info
+[0.967s] -- Detecting C compiler ABI info - done
+[1.000s] -- Check for working C compiler: /usr/bin/cc - skipped
+[1.001s] -- Detecting C compile features
+[1.002s] -- Detecting C compile features - done
+[1.028s] -- Detecting CXX compiler ABI info
+[1.269s] -- Detecting CXX compiler ABI info - done
+[1.302s] -- Check for working CXX compiler: /usr/bin/c++ - skipped
+[1.303s] -- Detecting CXX compile features
+[1.305s] -- Detecting CXX compile features - done
+[1.370s] [31mCMake Error at CMakeLists.txt:4 (find_package):
+[1.371s]   By not providing "Findcatkin.cmake" in CMAKE_MODULE_PATH this project has
+[1.371s]   asked CMake to find a package configuration file provided by "catkin", but
+[1.371s]   CMake did not find one.
+[1.371s] 
+[1.372s]   Could not find a package configuration file provided by "catkin" with any
+[1.372s]   of the following names:
+[1.372s] 
+[1.372s]     catkinConfig.cmake
+[1.372s]     catkin-config.cmake
+[1.373s] 
+[1.373s]   Add the installation prefix of "catkin" to CMAKE_PREFIX_PATH or set
+[1.373s]   "catkin_DIR" to a directory containing one of the above files.  If "catkin"
+[1.373s]   provides a separate development package or SDK, be sure it has been
+[1.373s]   installed.
+[1.374s] 
+[1.374s] [0m
+[1.374s] -- Configuring incomplete, errors occurred!
+[1.379s] Invoked command in '/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/build/ros_humans' returned '1': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake /home/sangam/Documents/Acad/sem-4/IRPP/PROJ/scan_project/human_models/ros_humans -DCATKIN_INSTALL_INTO_PREFIX_ROOT=0 -DCATKIN_SYMLINK_INSTALL=ON -DCMAKE_INSTALL_PREFIX=/home/sangam/Documents/Acad/sem-4/IRPP/PROJ/install/ros_humans
