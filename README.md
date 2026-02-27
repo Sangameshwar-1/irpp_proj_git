@@ -1,3 +1,15 @@
+``bash
+cd /home/sangam/Videos/irpp_proj_git/scan_project/human_models/ros_humans_ros2 && python3 -m py_compile ros_humans_ros2/astar_path_planner.py && echo "OK syntax" && source /opt/ros/jazzy/setup.bash && cd ~/ros2_ws && colcon build --symlink-install --packages-select ros_humans_ros2 2>&1 | tail -5
+```
+```bash
+./run_astar_navigation.sh
+```
+
+
+
+
+
+
 # DONT REFER THIS _______ROS2 A* Path Planning Navigation with Point Cloud Mapping
 
 A comprehensive ROS2 Jazzy project for autonomous robot navigation using A* path planning, real-time point cloud mapping, and Gazebo simulation.
