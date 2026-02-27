@@ -1,4 +1,4 @@
-``bash
+```bash
 cd /home/sangam/Videos/irpp_proj_git/scan_project/human_models/ros_humans_ros2 && python3 -m py_compile ros_humans_ros2/astar_path_planner.py && echo "OK syntax" && source /opt/ros/jazzy/setup.bash && cd ~/ros2_ws && colcon build --symlink-install --packages-select ros_humans_ros2 2>&1 | tail -5
 ```
 ```bash
