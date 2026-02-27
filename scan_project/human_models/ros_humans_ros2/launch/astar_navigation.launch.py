@@ -185,7 +185,7 @@ def generate_launch_description():
                 "room_max_x":  13.0,
                 "room_min_y": -13.0,
                 "room_max_y":  13.0,
-                "obstacle_inflation": 0.4,
+                "obstacle_inflation": 0.5,
                 "auto_start": True,
                 "default_goal_x": default_goal_x,
                 "default_goal_y": default_goal_y,
@@ -206,9 +206,9 @@ def generate_launch_description():
             parameters=[{
                 "map_frame": "map",
                 "robot_frame": "base_footprint",
-                "max_points": 100000,
+                "max_points": 20000,
                 "map_resolution": 0.1,
-                "map_size": 30.0,
+                "map_size": 28.0,
                 # Rover spawn pose so map→odom TF is correct
                 "spawn_x": 0.0,
                 "spawn_y": -8.0,

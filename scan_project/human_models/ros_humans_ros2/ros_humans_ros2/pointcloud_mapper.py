@@ -24,15 +24,16 @@ class PointCloudMapper(Node):
         # Parameters
         self.declare_parameter("map_frame", "map")
         self.declare_parameter("robot_frame", "base_footprint")
-        self.declare_parameter("max_points", 30000)
+        self.declare_parameter("max_points", 20000)
         self.declare_parameter("map_resolution", 0.1)  # 10cm per cell
-        self.declare_parameter("map_size", 30.0)  # 30m x 30m map
+        self.declare_parameter("map_size", 28.0)  # 28m x 28m map (matches static map)
         # Robot spawn position in world/map frame.
         # The DiffDrive odom starts at (0,0) where the robot spawned, so
         # map→odom translation = (spawn_x, spawn_y) to align the frames.
         self.declare_parameter("spawn_x", 0.0)
         self.declare_parameter("spawn_y", -8.0)  # rover spawns at y=-8 in large_messy_room
         self.declare_parameter("spawn_yaw", 1.5708)  # rover faces +Y at spawn
+        self.declare_parameter("max_scan_range", 8.0)  # limit usable LiDAR range (m)
         
         self.map_frame = self.get_parameter("map_frame").value
         self.robot_frame = self.get_parameter("robot_frame").value
@@ -42,6 +43,7 @@ class PointCloudMapper(Node):
         self.spawn_x = self.get_parameter("spawn_x").value
         self.spawn_y = self.get_parameter("spawn_y").value
         self.spawn_yaw = self.get_parameter("spawn_yaw").value
+        self.max_scan_range = self.get_parameter("max_scan_range").value
         # Precompute rotation constants for odom→world conversion
         self.spawn_cos = math.cos(self.spawn_yaw)
         self.spawn_sin = math.sin(self.spawn_yaw)
@@ -219,8 +221,11 @@ class PointCloudMapper(Node):
                     # Hit point - mark as occupied
                     self.hit_count[y, x] += 1
                 else:
-                    # Free space along ray
+                    # Free space along ray — also erode stale hits so
+                    # ghost walls from odom drift are corrected quickly.
                     self.miss_count[y, x] += 1
+                    if self.hit_count[y, x] > 0:
+                        self.hit_count[y, x] -= 1
             
             if x == gx1 and y == gy1:
                 break
@@ -258,8 +263,9 @@ class PointCloudMapper(Node):
         world_x = self.spawn_x + ox * self.spawn_cos - oy * self.spawn_sin
         world_y = self.spawn_y + ox * self.spawn_sin + oy * self.spawn_cos
 
+        usable_max = min(msg.range_max, self.max_scan_range)
         for r in msg.ranges:
-            if msg.range_min < r < msg.range_max:
+            if msg.range_min < r < usable_max:
                 # Point in robot frame
                 x_robot = r * math.cos(angle)
                 y_robot = r * math.sin(angle)
@@ -324,8 +330,8 @@ class PointCloudMapper(Node):
         # Apply temporal decay so stale observations from potentially
         # drifted odometry positions gradually fade out.  Fresh scans at
         # the current (locally accurate) position will dominate.
-        # Decay 0.95 every 2 s → after 20 s old data ≈ 60%, after 60 s ≈ 21%.
-        decay = 0.95
+        # Decay 0.88 every 2 s → after 10 s old data ≈ 53%, after 20 s ≈ 28%.
+        decay = 0.88
         self.hit_count = (self.hit_count.astype(np.float64) * decay).astype(np.int32)
         self.miss_count = (self.miss_count.astype(np.float64) * decay).astype(np.int32)
         

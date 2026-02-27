@@ -27,7 +27,7 @@ class AStarPathPlanner(Node):
         self.declare_parameter("goal_tolerance", 0.3)
         self.declare_parameter("grid_resolution", 0.2)  # meters per cell
         self.declare_parameter("grid_size", 100)  # cells (50m x 50m area)
-        self.declare_parameter("obstacle_inflation", 0.4)  # meters
+        self.declare_parameter("obstacle_inflation", 0.5)  # meters
         self.declare_parameter("room_min_x", -10.0)
         self.declare_parameter("room_max_x", 10.0)
         self.declare_parameter("room_min_y", -10.0)
@@ -265,8 +265,13 @@ class AStarPathPlanner(Node):
         if self.static_grid is not None:
             np.maximum(self.occupancy_grid, self.static_grid, out=self.occupancy_grid)
         
-        inscribed_radius = 0.18  # robot half-width
-        inflation_radius = self.obstacle_inflation  # 0.4 m default
+        # Rover dimensions from world file:
+        #   chassis box  = 0.28 × 0.18 m (L × W)
+        #   wheels at y=±0.12, half-width 0.0125 → total width 0.265 m
+        #   circumscribed radius = √(0.14² + 0.1325²) ≈ 0.193 m
+        # Use 0.20 m (≈ circumscribed radius + 7 mm safety margin)
+        inscribed_radius = 0.20  # robot circumscribed half-extent
+        inflation_radius = self.obstacle_inflation  # 0.5 m default
         inflation_cells = int(inflation_radius / self.grid_resolution)
         
         angle = scan.angle_min
@@ -609,11 +614,13 @@ class AStarPathPlanner(Node):
         
         self.get_logger().info(f"Following shortest path with {len(self.path)} waypoints ({all_distances[0]:.2f} m)")
     
-    def line_of_sight(self, x0, y0, x1, y1, clearance_cells=1):
+    def line_of_sight(self, x0, y0, x1, y1, clearance_cells=2):
         """Check if there is a clear line between two world points.
         
         Uses Bresenham's line + checking a `clearance_cells` band around
         each cell on the line.  Returns True if the path is obstacle-free.
+        clearance_cells=2 → 0.4 m band, ensuring the full rover width
+        (0.265 m) fits through the simplified path.
         """
         gx0, gy0 = self.world_to_grid(x0, y0)
         gx1, gy1 = self.world_to_grid(x1, y1)
@@ -631,7 +638,7 @@ class AStarPathPlanner(Node):
                 for cdy in range(-clearance_cells, clearance_cells + 1):
                     cx, cy = x + cdx, y + cdy
                     if self.is_valid_cell(cx, cy):
-                        if self.occupancy_grid[cy, cx] >= 90:
+                        if self.occupancy_grid[cy, cx] >= 80:
                             return False
                     else:
                         return False  # out of bounds
