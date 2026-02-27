@@ -4,6 +4,7 @@ cd /home/sangam/Videos/irpp_proj_git/scan_project/human_models/ros_humans_ros2 &
 ```bash
 ./run_astar_navigation.sh
 ```
+#JUST FOLLOW THIS TWO COMMANDS THATS IT
 
 
 
