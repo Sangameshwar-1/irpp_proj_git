@@ -16,6 +16,7 @@ setup(
             "launch/messy_road.launch.py",
             "launch/iiit_messy_road.launch.py",
             "launch/astar_navigation.launch.py",
+            "launch/world_to_map.launch.py",
         ]),
         ("share/" + package_name + "/worlds", glob("worlds/*.world")),
     ],
@@ -37,6 +38,8 @@ setup(
             "pointcloud_mapper = ros_humans_ros2.pointcloud_mapper:main",
             "camera_view_360 = ros_humans_ros2.camera_view_360:main",
             "astar_path_planner = ros_humans_ros2.astar_path_planner:main",
+            "world_to_map = ros_humans_ros2.world_to_map:main",
+            "map_publisher = ros_humans_ros2.map_publisher:main",
         ],
     },
 )
