@@ -74,15 +74,11 @@ def generate_launch_description():
                 "/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock"
             ],
         ),
-        Node(
-            package="ros_gz_bridge",
-            executable="parameter_bridge",
-            name="pose_tf_bridge",
-            output="screen",
-            arguments=[
-                "/world/large_messy_room/pose/info@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V"
-            ],
-        ),
+        # NOTE: The Gazebo Pose_V→TFMessage bridge was REMOVED here.
+        # It published ground-truth TFs for ALL entities (including
+        # turtlebot3_rover → base_footprint, base_link, lidar_link, …)
+        # which conflicted with our odom → base_footprint → base_link chain,
+        # causing the LaserScan / pointcloud overlay to drift during turns.
         # TurtleBot rover cmd_vel bridge (ROS2 -> Gazebo)
         Node(
             package="ros_gz_bridge",
@@ -167,6 +163,20 @@ def generate_launch_description():
                 "use_sim_time": True,
             }],
         ),
+        # Localization node: fuses odom + spawn offset, publishes /robot_pose
+        # Required for human_detector_red to convert camera detections to world frame
+        Node(
+            package="ros_humans_ros2",
+            executable="localization_node",
+            name="localization_node",
+            output="screen",
+            parameters=[{
+                "spawn_x": 0.0,
+                "spawn_y": -8.0,
+                "spawn_yaw": 1.5708,
+                "use_sim_time": True,
+            }],
+        ),
         # A* Path Planner (replaces rover_explorer for goal-based navigation)
         Node(
             package="ros_humans_ros2",
@@ -185,7 +195,7 @@ def generate_launch_description():
                 "room_max_x":  13.0,
                 "room_min_y": -13.0,
                 "room_max_y":  13.0,
-                "obstacle_inflation": 0.5,
+                "obstacle_inflation": 0.60,
                 "auto_start": True,
                 "default_goal_x": default_goal_x,
                 "default_goal_y": default_goal_y,
@@ -194,6 +204,11 @@ def generate_launch_description():
                 "spawn_x": 0.0,
                 "spawn_y": -8.0,
                 "spawn_yaw": 1.5708,
+                # Human-aware planning parameters
+                "human_inflation_radius": 0.8,
+                "human_predict_horizon": 3.0,
+                "human_costmap_weight": 60,
+                "human_replan_dist": 4.0,
                 "use_sim_time": True
             }],
         ),
@@ -206,13 +221,17 @@ def generate_launch_description():
             parameters=[{
                 "map_frame": "map",
                 "robot_frame": "base_footprint",
-                "max_points": 20000,
+                "max_points": 30000,
                 "map_resolution": 0.1,
                 "map_size": 28.0,
                 # Rover spawn pose so map→odom TF is correct
                 "spawn_x": 0.0,
                 "spawn_y": -8.0,
                 "spawn_yaw": 1.5708,
+                "max_scan_range": 6.0,           # shorter range = less noise
+                "point_lifetime": 5.0,           # 5s window (was 15s)
+                "min_move_dist": 0.05,           # skip accumulation when stationary
+                "publish_accumulated_cloud": True,
                 "use_sim_time": True
             }],
         ),
@@ -225,29 +244,55 @@ def generate_launch_description():
             parameters=[{"use_sim_time": True}],
         ),
         
-        # NOTE: Moving humans are DISABLED in this launch file
-        # To re-enable, uncomment the following nodes:
-        # Node(
-        #     package="ros_gz_bridge",
-        #     executable="parameter_bridge",
-        #     name="set_pose_bridge",
-        #     output="screen",
-        #     arguments=[
-        #         "/world/large_messy_room/set_pose@ros_gz_interfaces/srv/SetEntityPose"
-        #     ],
-        # ),
-        # Node(
-        #     package="ros_humans_ros2",
-        #     executable="move_humans",
-        #     name="move_humans",
-        #     output="screen",
-        #     parameters=[{"rate": 10.0, "world": "large_messy_room", "use_sim_time": True}],
-        # ),
-        # Node(
-        #     package="ros_humans_ros2",
-        #     executable="publish_human_pose",
-        #     name="human_pose_publisher",
-        #     output="screen",
-        #     parameters=[{"frame_id": "world", "use_sim_time": True}],
-        # ),
+        # NOTE: Moving humans are ENABLED with CV-based detection
+        # Human mover: animates the 5 moving humans along waypoints
+        Node(
+            package="ros_gz_bridge",
+            executable="parameter_bridge",
+            name="set_pose_bridge",
+            output="screen",
+            arguments=[
+                "/world/large_messy_room/set_pose@ros_gz_interfaces/srv/SetEntityPose"
+            ],
+        ),
+        Node(
+            package="ros_humans_ros2",
+            executable="move_humans",
+            name="move_humans",
+            output="screen",
+            parameters=[{"rate": 10.0, "world": "large_messy_room", "use_sim_time": True}],
+        ),
+        # NOTE: publish_human_pose was REMOVED — it depended on the
+        # Pose_V TF bridge (removed above) and nothing subscribes to
+        # /human_pose.  Human positions are detected by human_detector_red.
+        # RED-colour human detector — detects full-red humans from cameras
+        # and publishes their positions + velocities for A* replanning
+        Node(
+            package="ros_humans_ros2",
+            executable="human_detector_red",
+            name="human_detector_red",
+            output="screen",
+            parameters=[{
+                "detection_rate": 5.0,
+                "min_contour_area": 100,
+                "max_detect_range": 12.0,
+                "track_timeout": 1.5,
+                "publish_timeout": 0.6,
+                # Red HSV thresholds (red wraps around H=0/180)
+                "red_h_low1": 0,
+                "red_h_high1": 15,
+                "red_h_low2": 165,
+                "red_h_high2": 180,
+                "red_s_min": 50,
+                "red_v_min": 50,
+                "cam_focal_px": 320.0,
+                "reference_size": 0.5,         # human body diameter ~0.5m
+                "reference_height": 1.7,       # human body height ~1.7m
+                "cam_hfov_deg": 90.0,
+                "use_lidar_fusion": True,
+                "lidar_bearing_tolerance": 0.15,
+                "show_debug_window": True,
+                "use_sim_time": True,
+            }],
+        ),
     ])

@@ -238,6 +238,8 @@ echo -e "${BLUE}========================================${NC}"
 echo ""
 
 # Launch RViz2 for visualization
+# OGRE_RTT_MODE=Copy fixes RViz2 GLSL "active samplers with different type" error
+export OGRE_RTT_MODE=Copy
 if [ -f "$RVIZ_CONFIG" ]; then
     rviz2 -d "$RVIZ_CONFIG" &
     RVIZ_PID=$!

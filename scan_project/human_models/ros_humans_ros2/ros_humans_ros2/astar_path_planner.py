@@ -10,7 +10,7 @@ import heapq
 import rclpy
 import rclpy.qos
 from rclpy.node import Node
-from geometry_msgs.msg import Twist, PoseStamped, Point
+from geometry_msgs.msg import Twist, PoseStamped, Point, PoseArray
 from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import Odometry, OccupancyGrid, Path
 from visualization_msgs.msg import Marker, MarkerArray
@@ -27,7 +27,7 @@ class AStarPathPlanner(Node):
         self.declare_parameter("goal_tolerance", 0.3)
         self.declare_parameter("grid_resolution", 0.2)  # meters per cell
         self.declare_parameter("grid_size", 100)  # cells (50m x 50m area)
-        self.declare_parameter("obstacle_inflation", 0.5)  # meters
+        self.declare_parameter("obstacle_inflation", 0.7)  # meters - increased from 0.35
         self.declare_parameter("room_min_x", -10.0)
         self.declare_parameter("room_max_x", 10.0)
         self.declare_parameter("room_min_y", -10.0)
@@ -35,6 +35,15 @@ class AStarPathPlanner(Node):
         self.declare_parameter("auto_start", True)  # Auto start navigation
         self.declare_parameter("default_goal_x", 5.0)
         self.declare_parameter("default_goal_y", 5.0)
+        # Pure pursuit path following parameters (anti-drift)
+        self.declare_parameter("look_ahead_dist", 0.8)  # metres look-ahead - increased for smoother tracking
+        self.declare_parameter("steering_gain", 1.2)     # proportional steering gain - reduced to prevent oscillation
+        self.declare_parameter("max_cross_track_error", 0.5)  # max allowed cross-track error before correction
+        # Human-aware planning parameters
+        self.declare_parameter("human_inflation_radius", 1.2)  # metres around detected humans - increased from 0.8
+        self.declare_parameter("human_predict_horizon", 3.0)   # seconds to predict ahead
+        self.declare_parameter("human_costmap_weight", 80)     # cost injected for human cells - increased from 60
+        self.declare_parameter("human_replan_dist", 4.0)       # replan if human within this dist of robot
         
         self.linear_speed = self.get_parameter("linear_speed").value
         self.angular_speed = self.get_parameter("angular_speed").value
@@ -49,6 +58,17 @@ class AStarPathPlanner(Node):
         self.auto_start = self.get_parameter("auto_start").value
         self.default_goal_x = self.get_parameter("default_goal_x").value
         self.default_goal_y = self.get_parameter("default_goal_y").value
+        # Pure pursuit parameters for drift correction
+        self.look_ahead_dist = self.get_parameter("look_ahead_dist").value
+        self.steering_gain = self.get_parameter("steering_gain").value
+        self.max_cross_track_error = self.get_parameter("max_cross_track_error").value
+        # Cross-track error integral (for drift correction)
+        self.cross_track_integral = 0.0
+        self.integral_gain = 0.1  # small integral term to correct cumulative drift
+        self.human_inflation = self.get_parameter("human_inflation_radius").value
+        self.human_predict_horizon = self.get_parameter("human_predict_horizon").value
+        self.human_cost_weight = self.get_parameter("human_costmap_weight").value
+        self.human_replan_dist = self.get_parameter("human_replan_dist").value
         # Robot spawn position in world/map frame (odom starts at 0,0 at spawn).
         # Add this offset to convert odom coords → world/map coords.
         self.declare_parameter("spawn_x", 0.0)
@@ -85,6 +105,14 @@ class AStarPathPlanner(Node):
         self.static_map_info = None  # set once the world map is received
         self.static_grid = None      # permanent copy of world-map obstacles (never decayed)
         self.replan_cooldown = 0     # control cycles before next allowed replan
+        self.decay_counter = 0       # throttles costmap decay to every 5 scans
+        
+        # Human tracking state (from CV detector)
+        self.detected_humans = {}     # dict {id: (x, y)} – ID-keyed to survive race condition
+        self.human_velocities = {}     # dict {id: (vx, vy)}
+        self.human_grid = None         # dynamic human obstacle layer
+        self.human_replan_cooldown = 0 # cycles before next human-triggered replan
+        self.human_speed_factor = 1.0  # dynamic speed multiplier (reduced near humans)
         
         # Publishers
         self.cmd_vel_pub = self.create_publisher(Twist, "/cmd_vel", 10)
@@ -110,6 +138,13 @@ class AStarPathPlanner(Node):
         self.goal_sub = self.create_subscription(
             PoseStamped, "/goal_pose", self.goal_callback, 10
         )
+        # Subscribe to CV-detected human positions and velocities
+        self.human_sub = self.create_subscription(
+            PoseArray, "/detected_humans", self.humans_callback, 10
+        )
+        self.human_vel_sub = self.create_subscription(
+            PoseArray, "/human_velocities", self.human_vel_callback, 10
+        )
         # Subscribe to the static world map so the costmap can align with it
         self.map_sub = self.create_subscription(
             OccupancyGrid, "/map", self.static_map_callback, 
@@ -120,12 +155,15 @@ class AStarPathPlanner(Node):
             )
         )
         
-        # Control loop timer
-        self.timer = self.create_timer(0.1, self.control_loop)
+        # Control loop timer - 20 Hz for tight path following (was 10 Hz)
+        self.timer = self.create_timer(0.05, self.control_loop)
         self.grid_timer = self.create_timer(1.0, self.publish_grid)
         
-        self.get_logger().info("A* Path Planner started!")
+        self.get_logger().info("A* Path Planner started! (human-aware mode)")
         self.get_logger().info("Waiting for odometry and scan data...")
+        self.get_logger().info(f"Human avoidance: inflate={self.human_inflation}m, "
+                              f"predict={self.human_predict_horizon}s, "
+                              f"replan_dist={self.human_replan_dist}m")
         if self.auto_start:
             self.get_logger().info(f"Auto-start enabled. Will navigate to ({self.default_goal_x}, {self.default_goal_y}) once ready.")
         else:
@@ -137,7 +175,9 @@ class AStarPathPlanner(Node):
             self.get_logger().info("Scan data received!")
             self.scan_received = True
         self.scan_data = msg
-        self.update_occupancy_grid(msg)
+        # Snapshot robot pose at this exact moment so obstacle world-frame
+        # positions are consistent with the scan (prevents stale-yaw drift).
+        self.update_occupancy_grid(msg, self.current_x, self.current_y, self.current_yaw)
     
     def odom_callback(self, msg):
         """Update robot position from odometry.
@@ -228,6 +268,396 @@ class AStarPathPlanner(Node):
             f"({self.grid_origin_x:.2f}, {self.grid_origin_y:.2f})"
         )
 
+    # ── Human detection callbacks ─────────────────────────────────────────
+
+    def humans_callback(self, msg):
+        """Receive detected human positions – keyed by tracker ID (orientation.w)."""
+        self.detected_humans = {
+            int(p.orientation.w): (p.position.x, p.position.y)
+            for p in msg.poses
+        }
+        # Drop velocity entries for humans no longer tracked
+        stale = [k for k in self.human_velocities if k not in self.detected_humans]
+        for k in stale:
+            del self.human_velocities[k]
+        # Inject human obstacles into the costmap
+        self._inject_human_costmap()
+
+    def human_vel_callback(self, msg):
+        """Receive detected human velocities – keyed by tracker ID (orientation.w)."""
+        for p in msg.poses:
+            hid = int(p.orientation.w)
+            self.human_velocities[hid] = (p.position.x, p.position.y)
+
+    def _inject_human_costmap(self):
+        """Inject detected humans + predicted positions into the costmap.
+
+        For each detected human:
+          1. Mark current position with a high-cost inflated circle.
+          2. Predict future positions at 0.5s intervals up to
+             human_predict_horizon and mark them with decaying cost.
+        This creates a \"sweep\" in the costmap along the human's
+        predicted trajectory, encouraging A* to route around them.
+        """
+        if not self.detected_humans:
+            return
+
+        inflation_cells = int(self.human_inflation / self.grid_resolution)
+        predict_steps = int(self.human_predict_horizon / 0.5)  # every 0.5s
+
+        for hid, (hx, hy) in self.detected_humans.items():
+            # Get velocity by ID (default to stationary if not yet received)
+            vx, vy = self.human_velocities.get(hid, (0.0, 0.0))
+
+            # Mark current position + predicted positions
+            for step in range(predict_steps + 1):
+                dt = step * 0.5
+                px = hx + vx * dt
+                py = hy + vy * dt
+
+                # Cost decays with prediction time (less certain = lower cost)
+                if step == 0:
+                    cost = self.human_cost_weight  # current: high cost
+                else:
+                    decay = 1.0 - (dt / (self.human_predict_horizon + 0.1))
+                    cost = int(self.human_cost_weight * decay * 0.7)
+                cost = max(1, min(98, cost))  # keep below lethal (99)
+
+                gx, gy = self.world_to_grid(px, py)
+                for dx in range(-inflation_cells, inflation_cells + 1):
+                    for dy in range(-inflation_cells, inflation_cells + 1):
+                        ngx, ngy = gx + dx, gy + dy
+                        if self.is_valid_cell(ngx, ngy):
+                            dist_cells = math.hypot(dx, dy)
+                            if dist_cells <= inflation_cells:
+                                # Radial falloff within inflation zone
+                                ratio = dist_cells / max(inflation_cells, 1)
+                                cell_cost = int(cost * (1.0 - 0.6 * ratio))
+                                cell_cost = max(1, cell_cost)
+                                # Only increase, never overwrite static walls
+                                if cell_cost > self.occupancy_grid[ngy, ngx]:
+                                    if (self.static_grid is None or
+                                            self.static_grid[ngy, ngx] < 99):
+                                        self.occupancy_grid[ngy, ngx] = cell_cost
+
+    # ── Smart human-aware replanning ─────────────────────────────────────
+
+    def _analyze_human_threats(self):
+        """Analyze detected humans relative to the upcoming path.
+
+        For each human within range, determine the best response:
+          'ignore'    – human is far from path or moving away
+          'slow_down' – human is near but will clear, or far enough
+          'divert'    – human blocks the path; insert local arc
+          'replan'    – diversion not possible (walls), full A* needed
+
+        Considers:
+          • Human distance to upcoming path waypoints (not just to robot)
+          • Velocity direction: toward / away from path & robot
+          • Predicted clearance time
+          • Which side to divert (go *behind* the human)
+        """
+        threats = []
+        if not self.detected_humans or not self.path:
+            return threats
+        if self.current_path_idx >= len(self.path):
+            return threats
+
+        for hid, (hx, hy) in self.detected_humans.items():
+            # Velocity matched by ID – no index race condition
+            vx, vy = self.human_velocities.get(hid, (0.0, 0.0))
+            human_speed = math.hypot(vx, vy)
+
+            # Distance from robot to human
+            robot_dist = math.hypot(hx - self.current_x, hy - self.current_y)
+            # Only act on humans within the replan radius (strict 4 m)
+            if robot_dist > self.human_replan_dist:
+                continue
+
+            # Find the closest UPCOMING path waypoint to the human
+            min_path_dist = float('inf')
+            closest_wp_idx = self.current_path_idx
+            lookahead = min(self.current_path_idx + 15, len(self.path))
+            for wi in range(self.current_path_idx, lookahead):
+                d = math.hypot(hx - self.path[wi][0], hy - self.path[wi][1])
+                if d < min_path_dist:
+                    min_path_dist = d
+                    closest_wp_idx = wi
+
+            threat = {
+                'idx': hid, 'hx': hx, 'hy': hy,
+                'vx': vx, 'vy': vy, 'speed': human_speed,
+                'robot_dist': robot_dist, 'path_dist': min_path_dist,
+                'segment_idx': closest_wp_idx,
+            }
+
+            # If human is far from upcoming path → ignore
+            if min_path_dist > self.human_inflation + 1.0:
+                threat['action'] = 'ignore'
+                threats.append(threat)
+                continue
+
+            # ── Velocity analysis ──────────────────────────────────
+            wpx, wpy = self.path[closest_wp_idx]
+            to_path_x, to_path_y = wpx - hx, wpy - hy
+            to_path_len = math.hypot(to_path_x, to_path_y)
+
+            # Rate at which human is approaching the path (>0 = closing)
+            approach_rate = 0.0
+            if to_path_len > 0.01:
+                approach_rate = (vx * to_path_x + vy * to_path_y) / to_path_len
+
+            # Rate at which human is closing on the robot (>0 = closing)
+            to_robot_x = self.current_x - hx
+            to_robot_y = self.current_y - hy
+            closing_rate = 0.0
+            if robot_dist > 0.01:
+                closing_rate = (vx * to_robot_x + vy * to_robot_y) / robot_dist
+
+            # ── Decision logic ─────────────────────────────────────
+            # 1. Moving AWAY from both path and robot → ignore
+            if approach_rate < -0.2 and closing_rate < -0.15:
+                threat['action'] = 'ignore'
+                threats.append(threat)
+                continue
+
+            # 2. Crossing the path (mostly perpendicular, will clear soon)
+            if human_speed > 0.15 and abs(approach_rate) < human_speed * 0.5:
+                clear_dist = max(0.0, self.human_inflation + 0.5 - min_path_dist)
+                time_to_clear = (clear_dist / human_speed) if human_speed > 0.1 else 0.0
+                if time_to_clear < 4.0:
+                    threat['action'] = 'slow_down'
+                    threat['time_to_clear'] = time_to_clear
+                    threats.append(threat)
+                    continue
+
+            # 3. Human is ON or very near the path AND within 4m → divert around
+            if min_path_dist < self.human_inflation + 0.5 and robot_dist <= self.human_replan_dist:
+                threat['action'] = 'divert'
+                threat['divert_side'] = self._pick_divert_side(
+                    hx, hy, vx, vy, human_speed, closest_wp_idx)
+                threats.append(threat)
+                continue
+
+            # 4. Human on path but >4m away, or off-path but close → slow down only
+            threat['action'] = 'slow_down'
+            threats.append(threat)
+
+        return threats
+
+    def _pick_divert_side(self, hx, hy, vx, vy, speed, wp_idx):
+        """Choose which side (left/right of path) to divert to.
+
+        Strategy:
+          • If human is moving → go BEHIND them (opposite to velocity).
+          • If stationary → pick the side with more free space.
+        """
+        # Get path direction at the threatened segment
+        if wp_idx + 1 < len(self.path):
+            seg_dx = self.path[wp_idx + 1][0] - self.path[wp_idx][0]
+            seg_dy = self.path[wp_idx + 1][1] - self.path[wp_idx][1]
+        elif wp_idx > 0:
+            seg_dx = self.path[wp_idx][0] - self.path[wp_idx - 1][0]
+            seg_dy = self.path[wp_idx][1] - self.path[wp_idx - 1][1]
+        else:
+            seg_dx = self.path[wp_idx][0] - self.current_x
+            seg_dy = self.path[wp_idx][1] - self.current_y
+
+        seg_len = math.hypot(seg_dx, seg_dy)
+        if seg_len < 0.01:
+            return 'left'
+
+        if speed > 0.15:
+            # Human is moving — cross product of path dir × human velocity
+            # tells us which side the human is moving toward; go the OTHER side.
+            cross = seg_dx * vy - seg_dy * vx
+            return 'right' if cross > 0 else 'left'
+        else:
+            # Stationary — probe both sides and pick the clearer one
+            nl_x = -seg_dy / seg_len   # left normal
+            nl_y =  seg_dx / seg_len
+            probe = self.human_inflation + 0.8
+            lx, ly = hx + nl_x * probe, hy + nl_y * probe
+            rx, ry = hx - nl_x * probe, hy - nl_y * probe
+            lgx, lgy = self.world_to_grid(lx, ly)
+            rgx, rgy = self.world_to_grid(rx, ry)
+            l_cost = int(self.occupancy_grid[lgy, lgx]) if self.is_valid_cell(lgx, lgy) else 100
+            r_cost = int(self.occupancy_grid[rgy, rgx]) if self.is_valid_cell(rgx, rgy) else 100
+            return 'left' if l_cost <= r_cost else 'right'
+
+    def _local_diversion(self, threat):
+        """Insert a small arc of waypoints around a human into the current
+        path.  Much cheaper than a full A* replan and keeps the rest of the
+        route intact.
+
+        Creates 3 offset waypoints (approach / pass / rejoin) on the chosen
+        side of the human, accounting for the human's predicted motion.
+
+        Returns True if the diversion was inserted, False if the detour
+        cells are blocked and a full replan is needed.
+        """
+        hx, hy = threat['hx'], threat['hy']
+        vx, vy = threat['vx'], threat['vy']
+        wp_idx = threat['segment_idx']
+        side = threat.get('divert_side', 'left')
+
+        # Get path direction at the threatened waypoint
+        if wp_idx + 1 < len(self.path):
+            seg_dx = self.path[wp_idx + 1][0] - self.path[wp_idx][0]
+            seg_dy = self.path[wp_idx + 1][1] - self.path[wp_idx][1]
+        elif wp_idx > 0:
+            seg_dx = self.path[wp_idx][0] - self.path[wp_idx - 1][0]
+            seg_dy = self.path[wp_idx][1] - self.path[wp_idx - 1][1]
+        else:
+            seg_dx = self.path[wp_idx][0] - self.current_x
+            seg_dy = self.path[wp_idx][1] - self.current_y
+
+        seg_len = math.hypot(seg_dx, seg_dy)
+        if seg_len < 0.01:
+            return False
+
+        # Unit vectors: along path and perpendicular (normal)
+        udx, udy = seg_dx / seg_len, seg_dy / seg_len
+        if side == 'left':
+            nx, ny = -udy, udx
+        else:
+            nx, ny = udy, -udx
+
+        # Predict human position 1.5 s ahead (mid-pass estimate)
+        pred_hx = hx + vx * 1.5
+        pred_hy = hy + vy * 1.5
+
+        # Offset distance: enough clearance around the human
+        offset = self.human_inflation + 0.6
+
+        # Three diversion waypoints
+        # 1. Approach: 1.2 m before human, offset to the side
+        wp1 = (hx - udx * 1.2 + nx * offset,
+               hy - udy * 1.2 + ny * offset)
+        # 2. Pass: midpoint of current & predicted human pos, full offset
+        mid_hx = (hx + pred_hx) / 2.0
+        mid_hy = (hy + pred_hy) / 2.0
+        wp2 = (mid_hx + nx * offset,
+               mid_hy + ny * offset)
+        # 3. Rejoin: 1.2 m after human, easing back toward original path
+        wp3 = (hx + udx * 1.2 + nx * offset * 0.5,
+               hy + udy * 1.2 + ny * offset * 0.5)
+
+        # Validate all diversion waypoints are in free space
+        for (wx, wy) in [wp1, wp2, wp3]:
+            gx, gy = self.world_to_grid(wx, wy)
+            if not self.is_valid_cell(gx, gy):
+                return False
+            if self.occupancy_grid[gy, gx] >= 80:
+                return False
+            if not (self.room_min_x < wx < self.room_max_x and
+                    self.room_min_y < wy < self.room_max_y):
+                return False
+
+        # Splice the diversion into the path
+        insert_start = max(self.current_path_idx, wp_idx - 1)
+        rejoin_idx = min(wp_idx + 2, len(self.path))
+        new_path = (list(self.path[:insert_start]) +
+                    [wp1, wp2, wp3] +
+                    list(self.path[rejoin_idx:]))
+        self.path = new_path
+        self.current_path_idx = insert_start
+
+        # Update stored paths so RViz shows the diversion
+        if self.all_paths:
+            self.all_paths[0] = self.path
+            if self.all_distances:
+                self.all_distances[0] = self.path_distance(
+                    [(x, y) for x, y in self.path])
+
+        return True
+
+    def _get_look_ahead_point(self):
+        """Find a look-ahead point on the path for pure pursuit steering.
+        
+        Searches forward from the current waypoint to find a point that is
+        approximately look_ahead_dist away from the robot.  This creates
+        smooth steering behavior and reduces oscillation/drift.
+        """
+        if not self.path or self.current_path_idx >= len(self.path):
+            return self.current_x, self.current_y
+        
+        # Start from current target waypoint
+        look_ahead_x = self.path[self.current_path_idx][0]
+        look_ahead_y = self.path[self.current_path_idx][1]
+        
+        # Search forward to find a point at look_ahead_dist
+        accumulated_dist = 0.0
+        prev_x, prev_y = self.current_x, self.current_y
+        
+        for i in range(self.current_path_idx, len(self.path)):
+            wp_x, wp_y = self.path[i]
+            segment_dist = math.hypot(wp_x - prev_x, wp_y - prev_y)
+            accumulated_dist += segment_dist
+            
+            if accumulated_dist >= self.look_ahead_dist:
+                # Interpolate to get exact look-ahead point
+                overshoot = accumulated_dist - self.look_ahead_dist
+                if segment_dist > 0.01:
+                    ratio = overshoot / segment_dist
+                    look_ahead_x = wp_x - ratio * (wp_x - prev_x)
+                    look_ahead_y = wp_y - ratio * (wp_y - prev_y)
+                else:
+                    look_ahead_x, look_ahead_y = wp_x, wp_y
+                break
+            
+            look_ahead_x, look_ahead_y = wp_x, wp_y
+            prev_x, prev_y = wp_x, wp_y
+        
+        return look_ahead_x, look_ahead_y
+    
+    def _compute_cross_track_error(self):
+        """Compute the perpendicular distance from robot to the current path segment.
+        
+        Returns the signed cross-track error and the path heading angle:
+          positive = robot is to the left of the path  (needs right-steer correction)
+          negative = robot is to the right of the path (needs left-steer correction)
+        
+        Uses the segment the robot is currently travelling on:
+          path[current_path_idx - 1]  →  path[current_path_idx]  (current target)
+        """
+        if not self.path or self.current_path_idx >= len(self.path):
+            return 0.0, self.current_yaw
+        
+        # Use the segment the robot is CURRENTLY ON:
+        # from the previously-reached waypoint to the current target.
+        if self.current_path_idx > 0:
+            seg_start_x, seg_start_y = self.path[self.current_path_idx - 1]
+            seg_end_x,   seg_end_y   = self.path[self.current_path_idx]
+        elif len(self.path) > 1:
+            # Still on the very first segment
+            seg_start_x, seg_start_y = self.path[0]
+            seg_end_x,   seg_end_y   = self.path[1]
+        else:
+            return 0.0, self.current_yaw
+        
+        # Vector along the current path segment
+        path_dx = seg_end_x - seg_start_x
+        path_dy = seg_end_y - seg_start_y
+        path_len = math.hypot(path_dx, path_dy)
+        
+        if path_len < 0.01:
+            return 0.0, self.current_yaw
+        
+        # Path heading angle for this segment
+        path_heading = math.atan2(path_dy, path_dx)
+        
+        # Vector from segment start to robot
+        robot_dx = self.current_x - seg_start_x
+        robot_dy = self.current_y - seg_start_y
+        
+        # Signed perpendicular distance via 2-D cross product:
+        #   positive = robot is to the LEFT  of the path direction
+        #   negative = robot is to the RIGHT of the path direction
+        cross_track = (path_dx * robot_dy - path_dy * robot_dx) / path_len
+        
+        return cross_track, path_heading
+
     def world_to_grid(self, x, y):
         """Convert world coordinates to grid indices"""
         gx = int((x - self.grid_origin_x) / self.grid_resolution)
@@ -244,7 +674,7 @@ class AStarPathPlanner(Node):
         """Check if grid cell is within bounds"""
         return 0 <= gx < self.grid_width and 0 <= gy < self.grid_height
     
-    def update_occupancy_grid(self, scan):
+    def update_occupancy_grid(self, scan, robot_x=None, robot_y=None, robot_yaw=None):
         """Update occupancy grid from laser scan with gradient inflation.
         
         Instead of binary 0/100, cells near obstacles get a graduated cost
@@ -259,27 +689,38 @@ class AStarPathPlanner(Node):
         if scan is None:
             return
         
-        # Decay dynamic (LiDAR-detected) obstacles slightly
-        self.occupancy_grid = np.clip(self.occupancy_grid - 1, 0, 100)
-        # Restore permanent world-map walls so they are never decayed away
-        if self.static_grid is not None:
-            np.maximum(self.occupancy_grid, self.static_grid, out=self.occupancy_grid)
+        # Decay dynamic obstacles only every 5 scans (≈2 Hz instead of 10 Hz)
+        # Decay every 2 scans (was every 5) — faster decay reduces pink blob buildup.
+        # Decay by 3 per step (was 1) so dynamic obstacles clear in ~1s not ~5s.
+        self.decay_counter += 1
+        if self.decay_counter % 2 == 0:
+            self.occupancy_grid = np.clip(self.occupancy_grid - 3, 0, 100)
+            # Restore permanent world-map walls so they are never decayed away
+            if self.static_grid is not None:
+                np.maximum(self.occupancy_grid, self.static_grid, out=self.occupancy_grid)
         
         # Rover dimensions from world file:
         #   chassis box  = 0.28 × 0.18 m (L × W)
         #   wheels at y=±0.12, half-width 0.0125 → total width 0.265 m
         #   circumscribed radius = √(0.14² + 0.1325²) ≈ 0.193 m
-        # Use 0.20 m (≈ circumscribed radius + 7 mm safety margin)
-        inscribed_radius = 0.20  # robot circumscribed half-extent
-        inflation_radius = self.obstacle_inflation  # 0.5 m default
+        # Use 0.40 m lethal radius (increased for safety margin)
+        # so A* never routes the robot closer than 0.40 m to any obstacle.
+        inscribed_radius = 0.40  # lethal zone: A* fully avoids everything within this dist
+        inflation_radius = self.obstacle_inflation  # 0.70 m from launch param
         inflation_cells = int(inflation_radius / self.grid_resolution)
-        
+
+        # Use the snapshot pose passed from scan_callback to avoid stale-yaw errors
+        # (odom and scan callbacks may interleave at different rates).
+        rx = robot_x if robot_x is not None else self.current_x
+        ry = robot_y if robot_y is not None else self.current_y
+        ryaw = robot_yaw if robot_yaw is not None else self.current_yaw
+
         angle = scan.angle_min
         for i, r in enumerate(scan.ranges):
             if scan.range_min < r < scan.range_max:
-                # Calculate obstacle position in world frame
-                obs_x = self.current_x + r * math.cos(self.current_yaw + angle)
-                obs_y = self.current_y + r * math.sin(self.current_yaw + angle)
+                # Calculate obstacle position in world frame using snapshot pose
+                obs_x = rx + r * math.cos(ryaw + angle)
+                obs_y = ry + r * math.sin(ryaw + angle)
                 
                 # Mark obstacle in grid with gradient inflation
                 gx, gy = self.world_to_grid(obs_x, obs_y)
@@ -306,30 +747,29 @@ class AStarPathPlanner(Node):
             angle += scan.angle_increment
     
     def heuristic(self, a, b):
-        """Weighted A* heuristic: Octile distance × 1.2 weight.
+        """Weighted A* heuristic: Octile distance with optimal weighting.
         
         Octile distance is the optimal heuristic for 8-connected grids
-        (accounts for diagonal moves costing √2).  The 1.2 weight makes
-        A* slightly greedy — explores fewer nodes while still finding
-        near-optimal paths.  A small tie-breaking nudge (1e-3 × dx)
-        breaks symmetry so the search doesn't expand a fat band of equal-f
-        nodes, producing cleaner paths with fewer iterations.
+        (accounts for diagonal moves costing √2).  The 1.05 weight slightly
+        favours expansion toward the goal while maintaining near-optimal paths.
+        A cross-product tie-breaker breaks symmetry to produce straighter paths.
         """
         dx = abs(a[0] - b[0])
         dy = abs(a[1] - b[1])
         # Octile distance: min(dx,dy)*√2 + |dx-dy|*1
         octile = min(dx, dy) * 1.4142 + abs(dx - dy)
-        # Weight > 1 makes search greedy (fewer nodes explored)
-        weight = 1.2
-        # Tiny cross-product tie-breaker to prefer straight-line paths
-        cross = abs(dx * (b[1] - a[1]) - dy * (b[0] - a[0])) * 0.001
+        # Weight = 1.05 → slight bias toward goal, still near-optimal
+        weight = 1.05
+        # Cross-product tie-breaker for straighter paths (relative to start→goal line)
+        # This biases toward paths that stay close to the direct line
+        cross = abs(dx * (b[1] - a[1]) - dy * (b[0] - a[0])) * 0.0005
         return octile * weight + cross
     
     def get_neighbors(self, node):
         """Get valid neighboring cells for A* with proximity cost.
         
-        Cells with gradient costmap values (1-99) are traversable but
-        penalised — the rover strongly prefers cells far from obstacles.
+        Cells with gradient costmap values are traversable but penalised.
+        Cells >= 90 are now considered lethal to avoid planning near edges.
         """
         neighbors = []
         # 8-connected grid
@@ -342,15 +782,15 @@ class AStarPathPlanner(Node):
             nx, ny = node[0] + dx, node[1] + dy
             if self.is_valid_cell(nx, ny):
                 cell_cost = self.occupancy_grid[ny, nx]
-                if cell_cost >= 99:  # lethal obstacle — impassable
+                if cell_cost >= 90:  # lethal obstacle — impassable (lowered from 99)
                     continue
                 # Base movement cost (√2 for diagonal, 1 for cardinal)
                 move_cost = math.hypot(dx, dy)
-                # Proximity penalty: cells near obstacles cost more to traverse
-                # This makes A* route through open corridors, not hug walls
+                # Proximity penalty: cells near obstacles cost MUCH more to traverse
+                # This makes A* route through open corridors, avoiding edges
                 if cell_cost > 0:
-                    # Scale 1-98 → penalty 0.2 to 2.0
-                    proximity_penalty = (cell_cost / 98.0) * 2.0
+                    # Scale 1-89 → penalty up to 4.0 (STRONG preference for clearance)
+                    proximity_penalty = (cell_cost / 89.0) * 4.0
                     move_cost += proximity_penalty
                 neighbors.append(((nx, ny), move_cost))
         
@@ -547,7 +987,16 @@ class AStarPathPlanner(Node):
             world_path = self.simplify_path(world_path)
             paths_world.append(world_path)
             distances.append(self.path_distance(world_path))
-        
+
+        # Re-sort by EUCLIDEAN distance (shortest metres first).
+        # Yen's algorithm orders by costmap-weighted grid cost, so the
+        # cost-cheapest path is often a longer detour around inflated zones.
+        # We want all_paths[0] to be the geometrically shortest valid path.
+        if len(paths_world) > 1:
+            sorted_pairs = sorted(zip(paths_world, distances), key=lambda x: x[1])
+            paths_world = [p for p, _ in sorted_pairs]
+            distances   = [d for _, d in sorted_pairs]
+
         # Log results
         for idx, d in enumerate(distances):
             self.get_logger().info(f"  Path {idx+1}: {len(paths_world[idx])} waypoints, {d:.2f} m")
@@ -614,13 +1063,13 @@ class AStarPathPlanner(Node):
         
         self.get_logger().info(f"Following shortest path with {len(self.path)} waypoints ({all_distances[0]:.2f} m)")
     
-    def line_of_sight(self, x0, y0, x1, y1, clearance_cells=2):
+    def line_of_sight(self, x0, y0, x1, y1, clearance_cells=1):
         """Check if there is a clear line between two world points.
         
         Uses Bresenham's line + checking a `clearance_cells` band around
         each cell on the line.  Returns True if the path is obstacle-free.
-        clearance_cells=2 → 0.4 m band, ensuring the full rover width
-        (0.265 m) fits through the simplified path.
+        clearance_cells=1 → 0.2 m band, matching the rover's inscribed
+        radius (0.20 m) so simplified paths are still safe.
         """
         gx0, gy0 = self.world_to_grid(x0, y0)
         gx1, gy1 = self.world_to_grid(x1, y1)
@@ -992,10 +1441,59 @@ class AStarPathPlanner(Node):
                     while angle_diff < -math.pi:
                         angle_diff += 2 * math.pi
             
-            # ── Obstacle avoidance ──────────────────────────────────────────
-            # Decrement replan cooldown every cycle.
+            # ── Obstacle avoidance (LiDAR + human-aware) ────────────────────
+            # Decrement replan cooldowns every cycle.
             if self.replan_cooldown > 0:
                 self.replan_cooldown -= 1
+            if self.human_replan_cooldown > 0:
+                self.human_replan_cooldown -= 1
+
+            # Reset speed factor each cycle (threats will reduce it below)
+            self.human_speed_factor = 1.0
+
+            # ── Human-aware response (diversion / slow-down / replan) ──
+            if self.human_replan_cooldown == 0 and self.detected_humans:
+                threats = self._analyze_human_threats()
+                for threat in threats:
+                    action = threat.get('action', 'ignore')
+
+                    if action == 'ignore':
+                        continue
+
+                    elif action == 'slow_down':
+                        # Reduce speed proportionally to proximity
+                        factor = max(0.15, threat['robot_dist'] / self.human_replan_dist)
+                        self.human_speed_factor = min(self.human_speed_factor, factor)
+                        self.get_logger().info(
+                            f"Slowing for human {threat['idx']} "
+                            f"(dist={threat['robot_dist']:.1f}m, "
+                            f"speed×{factor:.2f}, "
+                            f"v=({threat['vx']:.1f},{threat['vy']:.1f}))",
+                            throttle_duration_sec=2.0)
+
+                    elif action == 'divert':
+                        side = threat.get('divert_side', 'left')
+                        self.get_logger().warn(
+                            f"Diverting {side} around human {threat['idx']} "
+                            f"(speed={threat['speed']:.1f}m/s, "
+                            f"dir=({threat['vx']:.1f},{threat['vy']:.1f}))")
+                        ok = self._local_diversion(threat)
+                        if ok:
+                            self.human_replan_cooldown = 30  # 3 s cooldown
+                            self.publish_all_paths()
+                            self.publish_markers()
+                            # Also slow down while executing the diversion
+                            self.human_speed_factor = min(
+                                self.human_speed_factor, 0.6)
+                        else:
+                            # Diversion blocked (wall) → full A* replan
+                            self.get_logger().warn(
+                                "Local diversion blocked \u2192 full replan")
+                            self.state = "PLANNING"
+                            self.plan_path()
+                            self.human_replan_cooldown = 50
+                            self.cmd_vel_pub.publish(cmd)
+                            return
 
             if self.scan_data is not None and self.replan_cooldown == 0:
                 # 1. Forward-arc proximity check: emergency replan when anything
@@ -1003,7 +1501,7 @@ class AStarPathPlanner(Node):
                 obstacle_close = False
                 close_count = 0
                 for i, r in enumerate(self.scan_data.ranges):
-                    if self.scan_data.range_min < r < 0.35:
+                    if self.scan_data.range_min < r < 0.55:
                         angle = self.scan_data.angle_min + i * self.scan_data.angle_increment
                         if abs(angle) < 0.52:  # ±30°
                             close_count += 1
@@ -1031,43 +1529,74 @@ class AStarPathPlanner(Node):
                     self.get_logger().warn(f"Replanning: {reason}")
                     self.state = "PLANNING"
                     self.plan_path()  # replan with updated costmap
-                    self.replan_cooldown = 80  # ~8 s before next replan check
+                    self.replan_cooldown = 25  # ~2.5 s before next replan check
                     self.cmd_vel_pub.publish(cmd)
                     return
             # ── End obstacle avoidance ──────────────────────────────────────
             
-            # ── Improved path following ────────────────────────────────
-            # Look-ahead: peek at the NEXT waypoint to anticipate curvature
+            # ── Two-Phase Path Controller ───────────────────────────────────
+            cross_track_error, path_heading = self._compute_cross_track_error()
+
+            heading_error = path_heading - self.current_yaw
+            while heading_error > math.pi:
+                heading_error -= 2 * math.pi
+            while heading_error < -math.pi:
+                heading_error += 2 * math.pi
+
+            # ── Phase 1: Large heading error → rotate in place first ────────
+            # When heading error > 57° the robot would otherwise spin in tiny
+            # circles (v/w = 0.08/0.5 = 0.16 m radius).  Stop and rotate
+            # cleanly instead; Stanley resumes once heading is aligned.
+            if abs(heading_error) > 1.0:
+                cmd.linear.x  = 0.0
+                cmd.angular.z = math.copysign(
+                    min(self.angular_speed, 0.7 * abs(heading_error)),
+                    heading_error)
+                if self.progress_counter % 20 == 0:
+                    self.get_logger().info(
+                        f"ROTATE: h_err={heading_error:.2f}, "
+                        f"ct={cross_track_error:.2f}, "
+                        f"w={cmd.angular.z:.2f}")
+                self.cmd_vel_pub.publish(cmd)
+                return
+
+            # ── Phase 2: Heading aligned → Stanley path following ───────────
+            # cross_track_error: +ve = robot LEFT  of path → steer RIGHT → negate
+            #                    -ve = robot RIGHT of path → steer LEFT  → negate
+            stanley_k = 4.0
+            softening_vel = 0.2
+            cross_track_term = math.atan2(stanley_k * (-cross_track_error), softening_vel)
+            stanley_steer = heading_error + cross_track_term
+            stanley_steer = max(-self.angular_speed, min(self.angular_speed, stanley_steer))
+
+            # Speed: slow down proportionally to errors, always keep minimum
+            heading_factor = max(0.1, 1.0 - abs(heading_error) / math.pi)
+            ct_factor      = max(0.2, 1.0 - abs(cross_track_error) / 1.0)
+
+            # Curvature factor
             curvature = 0.0
             if self.current_path_idx + 1 < len(self.path):
                 next_x, next_y = self.path[self.current_path_idx + 1]
                 ahead_angle = math.atan2(next_y - target_y, next_x - target_x)
-                curvature = abs(ahead_angle - target_angle)
+                curvature = abs(ahead_angle - path_heading)
                 if curvature > math.pi:
                     curvature = 2 * math.pi - curvature
-            
-            if abs(angle_diff) > 0.5:
-                # Large angle error — rotate in place
-                cmd.angular.z = self.angular_speed if angle_diff > 0 else -self.angular_speed
-                cmd.linear.x = 0.05  # Small creep while turning
-            elif abs(angle_diff) > 0.15:
-                # Moderate angle — slow forward + strong steering
-                cmd.linear.x = 0.10
-                cmd.angular.z = angle_diff * 2.0
-            else:
-                # Straight-ish — speed adapts to upcoming curvature
-                # Slow down for sharp upcoming turns, speed up on straights
-                curvature_factor = max(0.3, 1.0 - curvature * 0.8)
-                # Also slow down when close to waypoint (smooth deceleration)
-                approach_factor = min(1.0, distance / 0.8)
-                speed = self.linear_speed * curvature_factor * approach_factor
-                speed = max(0.08, min(self.linear_speed, speed))
-                cmd.linear.x = speed
-                cmd.angular.z = angle_diff * 2.0  # Proportional steering
-            
-            # Debug log velocity commands occasionally
-            if self.progress_counter % 20 == 0:
-                self.get_logger().info(f"CMD: linear={cmd.linear.x:.2f}, angular={cmd.angular.z:.2f}, angle_diff={angle_diff:.2f}")
+            curvature_factor = max(0.4, 1.0 - curvature * 0.5)
+            approach_factor  = min(1.0, distance / 0.4)
+
+            speed = (self.linear_speed * heading_factor * ct_factor *
+                     curvature_factor * approach_factor * self.human_speed_factor)
+            speed = max(0.08, min(self.linear_speed * 0.9, speed))
+
+            cmd.linear.x  = speed
+            cmd.angular.z = stanley_steer
+
+            # Debug log
+            if self.progress_counter % 40 == 0:
+                self.get_logger().info(
+                    f"CTRL: v={cmd.linear.x:.2f}, w={cmd.angular.z:.2f}, "
+                    f"h_err={heading_error:.2f}, ct={cross_track_error:.2f}"
+                )
         
         self.cmd_vel_pub.publish(cmd)
 

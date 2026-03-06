@@ -29,14 +29,12 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /map
       Use Timestamp: false
-    # ── LAYER 2: sensor-built occupancy grid (from LiDAR point cloud mapper) ──
-    # Overlaid semi-transparently on the static world map so you can see
-    # which areas the rover has explored via its LiDAR.
+    # ── LAYER 2: sensor-built occupancy grid (DISABLED – redundant with A* costmap) ──
     - Alpha: 0.55
       Class: rviz_default_plugins/Map
       Color Scheme: costmap
       Draw Behind: false
-      Enabled: true
+      Enabled: false
       Name: SensorMap
       Topic:
         Depth: 5
@@ -45,8 +43,8 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /pointcloud_map
       Use Timestamp: false
-    # ── LAYER 3: A* live costmap (obstacles inflated for path planning) ──
-    - Alpha: 0.35
+    # ── LAYER 3: A* live costmap (obstacles + humans inflated for planning) ──
+    - Alpha: 0.25
       Class: rviz_default_plugins/Map
       Color Scheme: costmap
       Draw Behind: false
@@ -57,12 +55,12 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /local_costmap
+        Value: /weighted_grid_viz
       Use Timestamp: false
     - Class: rviz_default_plugins/LaserScan
       Color: 255; 0; 0
       Color Transformer: FlatColor
-      Enabled: true
+      Enabled: false
       Name: LaserScan
       Size (Pixels): 3
       Style: Points
@@ -72,12 +70,21 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Best Effort
         Value: /scan
+    # ── LAYER: current LiDAR ring (line-of-sight – WHITE) ──
     - Class: rviz_default_plugins/PointCloud2
-      Color: 0; 255; 0
-      Color Transformer: FlatColor
+      Color: 255; 255; 255
+      Color Transformer: Intensity
+      Channel Name: intensity
+      Min Color: 160; 160; 160
+      Max Color: 255; 255; 255
+      Invert Rainbow: false
+      Use Rainbow: false
+      Autocompute Intensity Bounds: false
+      Min Intensity: 0.0
+      Max Intensity: 1.0
       Enabled: true
       Name: ScanPointCloud
-      Size (Pixels): 2
+      Size (Pixels): 4
       Style: Points
       Topic:
         Depth: 5
@@ -85,12 +92,21 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Best Effort
         Value: /scan_pointcloud
+    # ── LAYER: accumulated explored map (GRAY) ──
     - Class: rviz_default_plugins/PointCloud2
-      Color: 255; 255; 0
-      Color Transformer: FlatColor
+      Color: 160; 160; 160
+      Color Transformer: Intensity
+      Channel Name: intensity
+      Min Color: 60; 60; 60
+      Max Color: 160; 160; 160
+      Invert Rainbow: false
+      Use Rainbow: false
+      Autocompute Intensity Bounds: false
+      Min Intensity: 0.0
+      Max Intensity: 1.0
       Enabled: true
       Name: MapPointCloud
-      Size (Pixels): 1
+      Size (Pixels): 2
       Style: Points
       Topic:
         Depth: 5
@@ -171,6 +187,16 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /path_markers
+    # ── Detected humans from CV pipeline ──
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: DetectedHumans
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /detected_humans_markers
 
   Global Options:
     Background Color: 48; 48; 48

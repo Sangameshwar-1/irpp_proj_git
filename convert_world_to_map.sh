@@ -136,6 +136,8 @@ if [ ! -f "$RVIZ_CONFIG" ]; then
     RVIZ_CONFIG="$HOME/Videos/irpp_proj_git/scan_project/rviz_config.rviz"
 fi
 
+# OGRE_RTT_MODE=Copy fixes RViz2 GLSL "active samplers with different type" error
+export OGRE_RTT_MODE=Copy
 if [ -f "$RVIZ_CONFIG" ]; then
     rviz2 -d "$RVIZ_CONFIG" &
     RVIZ_PID=$!
