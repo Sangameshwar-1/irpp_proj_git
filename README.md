@@ -1,51 +1,79 @@
-# Social Navigation for Mobile Robots — IRPP Project
+# SCAN — Socially Compliant Autonomous Navigation
 
+> **IRPP Project · IIIT Hyderabad · Spring 2026**
+>
 > **ROS 2 Jazzy · Gazebo Harmonic · Ubuntu 24.04 · Python 3.12**
 
-A complete socially-aware robot navigation system that detects humans
+[![ROS 2](https://img.shields.io/badge/ROS%202-Jazzy-blue)](https://docs.ros.org/en/jazzy/)
+[![Gazebo](https://img.shields.io/badge/Gazebo-Harmonic-orange)](https://gazebosim.org/)
+[![Python](https://img.shields.io/badge/Python-3.12-green)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
+
+A complete **socially-aware robot navigation system** that detects humans
 through vision (or uses ground-truth injection), localises via scan-matched
 odometry, plans globally with A\*, and applies **five distinct social
 behaviour cases** in real-time — all running in a Gazebo simulation with
 full RViz visualisation.
 
+**Authors:** Jai Srikar M · Rithik Reddy P · S Sangameshwar
+**Course:** Introduction to Robotics: Perception and Planning (Spring 2026)
+
 ---
 
 ## Table of Contents
 
-1.  [System Overview](#1-system-overview)
-2.  [High-Level Architecture](#2-high-level-architecture)
-3.  [Directory Structure](#3-directory-structure)
-4.  [Software Stack & Libraries](#4-software-stack--libraries)
-5.  [Node Reference (Detailed)](#5-node-reference-detailed)
-    - 5.1  [Simulation & Bridges](#51-simulation--bridges)
-    - 5.2  [Map Publisher](#52-map-publisher-map_publisherpy)
-    - 5.3  [Pointcloud Mapper](#53-pointcloud-mapper-pointcloud_mapperpy)
-    - 5.4  [Localization Node](#54-localization-node-localization_nodepy)
-    - 5.5  [Human Mover](#55-human-mover-move_humanspy)
-    - 5.6  [Human Detector (Red)](#56-human-detector-red-human_detector_redpy)
-    - 5.7  [Camera View 360](#57-camera-view-360-camera_view_360py)
-    - 5.8  [Weighted Grid](#58-weighted-grid-module-weighted_gridpy)
-    - 5.9  [Global Planner](#59-global-planner-global_plannerpy)
-    - 5.10 [Local Planner](#510-local-planner-local_plannerpy)
-    - 5.11 [Social Nav Planner](#511-social-navigation-planner-social_nav_plannerpy)
-    - 5.12 [Human Case Controller](#512-human-case-controller-human_case_controllerpy)
-    - 5.13 [Live Visualization Node](#513-live-visualization-node-live_visualization_nodepy)
-    - 5.14 [A\* Path Planner (Legacy)](#514-a-path-planner-legacy-astar_path_plannerpy)
-    - 5.15 [World-to-Map Converter](#515-world-to-map-converter-world_to_mappy)
-6.  [Data Flow & Topic Map](#6-data-flow--topic-map)
-7.  [Coordinate Frames (TF Tree)](#7-coordinate-frames-tf-tree)
-8.  [Social Navigation Cases](#8-social-navigation-cases)
-9.  [Planning Architecture — How A\* Rerouting Works](#9-planning-architecture--how-a-rerouting-works)
-10. [Launch Files](#10-launch-files)
-11. [Gazebo Worlds](#11-gazebo-worlds)
-12. [Quick Start](#12-quick-start)
-13. [Shell Scripts Reference](#13-shell-scripts-reference)
-14. [Key Parameters & Constants](#14-key-parameters--constants)
-15. [Troubleshooting](#15-troubleshooting)
+1.  [Project Summary](#1-project-summary)
+2.  [System Overview](#2-system-overview)
+3.  [High-Level Architecture](#3-high-level-architecture)
+4.  [End-to-End Workflow](#4-end-to-end-workflow)
+5.  [Tech Stack & Dependencies](#5-tech-stack--dependencies)
+6.  [Directory Structure](#6-directory-structure)
+7.  [Node Reference (Detailed)](#7-node-reference-detailed)
+    - 7.1  [Simulation & Bridges](#71-simulation--bridges)
+    - 7.2  [Map Publisher](#72-map-publisher-map_publisherpy)
+    - 7.3  [Pointcloud Mapper](#73-pointcloud-mapper-pointcloud_mapperpy)
+    - 7.4  [Localization Node](#74-localization-node-localization_nodepy)
+    - 7.5  [Human Mover](#75-human-mover-move_humanspy)
+    - 7.6  [Human Detector (Red)](#76-human-detector-red-human_detector_redpy)
+    - 7.7  [Camera View 360](#77-camera-view-360-camera_view_360py)
+    - 7.8  [Weighted Grid](#78-weighted-grid-module-weighted_gridpy)
+    - 7.9  [Global Planner](#79-global-planner-global_plannerpy)
+    - 7.10 [Local Planner](#710-local-planner-local_plannerpy)
+    - 7.11 [Social Nav Planner](#711-social-navigation-planner-social_nav_plannerpy)
+    - 7.12 [Human Case Controller](#712-human-case-controller-human_case_controllerpy)
+    - 7.13 [Live Visualization Node](#713-live-visualization-node-live_visualization_nodepy)
+    - 7.14 [A\* Path Planner (Legacy)](#714-a-path-planner-legacy-astar_path_plannerpy)
+    - 7.15 [World-to-Map Converter](#715-world-to-map-converter-world_to_mappy)
+8.  [Data Flow & Topic Map](#8-data-flow--topic-map)
+9.  [Coordinate Frames (TF Tree)](#9-coordinate-frames-tf-tree)
+10. [Social Navigation Cases](#10-social-navigation-cases)
+11. [Planning Architecture — How A\* Rerouting Works](#11-planning-architecture--how-a-rerouting-works)
+12. [Launch Files](#12-launch-files)
+13. [Gazebo Worlds](#13-gazebo-worlds)
+14. [Quick Start](#14-quick-start)
+15. [Shell Scripts Reference](#15-shell-scripts-reference)
+16. [Key Parameters & Constants](#16-key-parameters--constants)
+17. [Troubleshooting](#17-troubleshooting)
+18. [Project Report](#18-project-report)
 
 ---
 
-## 1. System Overview
+## 1. Project Summary
+
+**SCAN (Socially Compliant Autonomous Navigation)** is a research project developed for the *Introduction to Robotics: Perception and Planning* course at IIIT Hyderabad. The system enables a TurtleBot3 rover to navigate through environments populated with moving humans while respecting **proxemic social zones** — maintaining safe, comfortable, and predictable behaviour.
+
+### Core Contributions
+
+- **Vision-based human detection** using HSV colour thresholding + Kalman filter tracking from 4 RGB cameras
+- **Scan-matched localization** that corrects odometry drift using correlative LiDAR matching against the static map
+- **A\*-based global planning** on a dynamically weighted occupancy grid, with proactive + reactive replanning around detected humans
+- **Case-based social navigation** implementing 5 distinct human-interaction behaviours (stationary blocker, head-on, crossing, same-direction, fast-from-behind) with velocity obstacle collision cones
+- **14 Gazebo worlds** for testing across diverse environments (rooms, corridors, campus roads, grid maps)
+- **Complete RViz visualization** with collision cones, proxemic zones, planned paths, and real-time decision overlays
+
+---
+
+## 2. System Overview
 
 The system drives a **TurtleBot3-Rover** through Gazebo worlds populated
 with walking human models. Three software layers cooperate in a
@@ -71,7 +99,7 @@ reducing speed inside the social zone (1.5 m).
 
 ---
 
-## 2. High-Level Architecture
+## 3. High-Level Architecture
 
 ```
             ┌──────────────────────────────────────────────────────────┐
@@ -124,11 +152,125 @@ reducing speed inside the social zone (1.5 m).
 
 ---
 
-## 3. Directory Structure
+## 4. End-to-End Workflow
+
+The following diagram shows the complete execution pipeline from launching a simulation to autonomous social navigation:
+
+```
+  ┌──────────────────────────────────────────────────────────────────────────┐
+  │                        USER LAUNCHES SYSTEM                             │
+  │              ./run_navigation.sh [camera|no_camera] [x] [y]            │
+  └────────────────────────────────┬─────────────────────────────────────────┘
+                                   │
+          ┌────────────────────────┼────────────────────────────────────────┐
+          ▼                        ▼                                        ▼
+  ┌───────────────┐    ┌──────────────────────┐    ┌──────────────────────┐
+  │ 1. BUILD      │    │ 2. MAP GENERATION    │    │ 3. SOURCE            │
+  │ colcon build  │    │ .world → .pgm/.yaml  │    │ workspace + ROS 2    │
+  │ --symlink-    │    │ (world_to_map.py)     │    │                      │
+  │ install       │    │                       │    │                      │
+  └───────┬───────┘    └──────────┬────────────┘    └──────────┬───────────┘
+          │                       │                             │
+          └───────────────────────┼─────────────────────────────┘
+                                  ▼
+  ┌──────────────────────────────────────────────────────────────────────────┐
+  │ 4. LAUNCH FILE (navigation.launch.py)                                   │
+  │                                                                          │
+  │  ┌─────────────┐  ┌──────────┐  ┌──────────────┐  ┌──────────────────┐ │
+  │  │ Gazebo Sim  │  │ 9 ROS-Gz │  │ Map Publisher │  │ Pointcloud       │ │
+  │  │ (world +    │  │ Bridges  │  │ (static map → │  │ Mapper (TF tree  │ │
+  │  │ TurtleBot3) │  │          │  │  /map topic)  │  │ + point clouds)  │ │
+  │  └─────────────┘  └──────────┘  └──────────────┘  └──────────────────┘ │
+  │                                                                          │
+  │  ┌────────────────┐  ┌──────────────────┐  ┌─────────────────────────┐ │
+  │  │ Localization   │  │ Move Humans (GT) │  │ Human Detector (camera  │ │
+  │  │ (scan-match    │  │ OR               │  │ mode only: HSV + Kalman │ │
+  │  │  correction)   │  │ Human Case Ctrl  │  │ tracking)               │ │
+  │  └────────────────┘  └──────────────────┘  └─────────────────────────┘ │
+  │                                                                          │
+  │  ┌────────────────┐  ┌──────────────────┐  ┌─────────────────────────┐ │
+  │  │ Global Planner │  │ Social Nav       │  │ Live Visualization      │ │
+  │  │ (A* weighted   │  │ Planner (case-   │  │ (GT vs perception       │ │
+  │  │ grid + replan) │  │ based VO ctrl)   │  │ comparison in RViz)     │ │
+  │  └────────────────┘  └──────────────────┘  └─────────────────────────┘ │
+  └──────────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+  ┌──────────────────────────────────────────────────────────────────────────┐
+  │ 5. RUNTIME LOOP (10 Hz)                                                 │
+  │                                                                          │
+  │  Sensors → Perception → Localization → Global A* → Social Nav → /cmd_vel │
+  │                                                                          │
+  │  On human detected near path:                                            │
+  │    • Proactive replan (global planner monitors path, 1 Hz)               │
+  │    • Reactive replan (social planner triggers when entering social zone)  │
+  │    • Case-based speed/heading adjustment (social nav planner, 10 Hz)     │
+  └──────────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+                         ┌────────────────┐
+                         │ 6. RViz        │
+                         │ Visualization  │
+                         │ (all markers + │
+                         │  maps + paths) │
+                         └────────────────┘
+```
+
+### Perception Pipeline Flow
+
+```
+  4 RGB Cameras (front/right/back/left, 90° each = 360° coverage)
+       │
+       ▼
+  ┌─────────────────────────────────────────────────────┐
+  │ human_detector_red.py                                │
+  │                                                      │
+  │  BGR → HSV → Red Threshold → Morphology → Contours  │
+  │       → Pinhole Range Estimate → Bearing Estimate    │
+  │       → World-Frame Projection (using /robot_pose)   │
+  │       → Kalman Filter Tracking (per target)          │
+  │       → Optional LiDAR Fusion (range correction)     │
+  │                                                      │
+  │  Output: /detected_humans (PoseArray)                │
+  │          /human_velocities (PoseArray)               │
+  └─────────────────────────────────────────────────────┘
+```
+
+### Planning Pipeline Flow
+
+```
+  /map (static)  +  /detected_humans  +  /human_velocities  +  /robot_pose
+       │                  │                     │                    │
+       ▼                  ▼                     ▼                    ▼
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │                      GLOBAL PLANNER                                 │
+  │  1. Build WeightedGrid from /map (one-time)                         │
+  │  2. A* search → /global_path                                        │
+  │  3. Proactive monitor (1 Hz): check humans vs path segments         │
+  │  4. Receive /weight_zones → update dynamic costs → re-run A*        │
+  └────────────────────────────┬─────────────────────────────────────────┘
+                               │ /global_path
+                               ▼
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │                   SOCIAL NAV PLANNER (10 Hz)                        │
+  │  For each detected human:                                           │
+  │    1. Classify → Case 1/2/3/4a/4b/5                                │
+  │    2. Compute collision cone (velocity obstacle)                    │
+  │    3. Apply case-specific speed/heading rules                       │
+  │    4. Layer: proximity cap → VO cap → personal zone guard           │
+  │    5. If path enters social circle → /weight_zones + /replan_request│
+  │  Output: /cmd_vel (Twist)                                           │
+  └──────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 6. Directory Structure
 
 ```
 irpp_proj_git/
 ├── README.md                          ← This file
+├── main.tex                           ← LaTeX project report (SCAN paper)
 ├── run_simulation.sh                  ← Basic Gazebo + pointcloud demo
 ├── run_navigation.sh                  ← Full social navigation stack
 ├── run_test_case.sh                   ← Isolated social nav case tests
@@ -198,9 +340,9 @@ irpp_proj_git/
 
 ---
 
-## 4. Software Stack & Libraries
+## 5. Tech Stack & Dependencies
 
-### 4.1 Core Framework
+### 5.1 Core Framework
 
 | Component              | Version / Details                                         |
 |------------------------|-----------------------------------------------------------|
@@ -209,7 +351,7 @@ irpp_proj_git/
 | **Python**             | 3.12                                                      |
 | **Build system**       | `colcon` + `ament_python`                                 |
 
-### 4.2 ROS 2 Packages Used
+### 5.2 ROS 2 Packages Used
 
 | Package                 | Purpose                                                     |
 |-------------------------|-------------------------------------------------------------|
@@ -224,7 +366,7 @@ irpp_proj_git/
 | `ros_gz_interfaces`     | `SetEntityPose` service, `Entity` message (teleport models) |
 | `ros_gz_sim`            | Gazebo launch integration (`gz_sim.launch.py`)              |
 
-### 4.3 Python Libraries
+### 5.3 Python Libraries
 
 | Library      | Purpose                                                            |
 |--------------|--------------------------------------------------------------------|
@@ -240,11 +382,25 @@ irpp_proj_git/
 | `xml.etree`  | Parse SDF .world files for offline map generation                  |
 | `argparse`   | CLI argument parsing for the world_to_map tool                     |
 
+### 5.4 Codebase Statistics
+
+| Metric | Value |
+|--------|-------|
+| **Total Python nodes** | 18 registered entry points |
+| **Lines of code** (Python) | ~6,500+ across all nodes |
+| **Launch files** | 8 launch configurations |
+| **Gazebo worlds** | 14 simulation environments |
+| **Shell scripts** | 8 automation scripts |
+| **ROS 2 topics** | 25+ published/subscribed topics |
+| **Social nav cases** | 5 distinct behavioural cases + 4 diagonal variants |
+
 ---
 
-## 5. Node Reference (Detailed)
+## 6. Directory Structure
 
-### 5.1 Simulation & Bridges
+## 7. Node Reference (Detailed)
+
+### 7.1 Simulation & Bridges
 
 Gazebo Harmonic runs the physics simulation. **`ros_gz_bridge`** parameter bridges connect Gazebo and ROS 2:
 
@@ -257,7 +413,7 @@ Gazebo Harmonic runs the physics simulation. **`ros_gz_bridge`** parameter bridg
 | Cameras (×4)         | Gz → ROS         | `/camera/{front,right,back,left}/image` | same            | `Image`                 |
 | Set Entity Pose      | ROS ↔ Gz         | `/world/<name>/set_pose`             | same               | `SetEntityPose` (service) |
 
-### 5.2 Map Publisher (`map_publisher.py`)
+### 7.2 Map Publisher (`map_publisher.py`)
 
 Loads a pre-generated occupancy map from **PGM + YAML** files and publishes it on `/map` with **TRANSIENT_LOCAL** durability so late-joining subscribers receive it.
 
@@ -265,7 +421,7 @@ Loads a pre-generated occupancy map from **PGM + YAML** files and publishes it o
 - **Output:** `/map` (`OccupancyGrid`)
 - **Key detail:** Image rows are flipped (PGM is top-down, ROS maps are bottom-up)
 
-### 5.3 Pointcloud Mapper (`pointcloud_mapper.py`)
+### 7.3 Pointcloud Mapper (`pointcloud_mapper.py`)
 
 Provides the **TF tree** and optional live pointcloud mapping:
 
@@ -279,7 +435,7 @@ Provides the **TF tree** and optional live pointcloud mapping:
 
 Also converts LiDAR scans to world-frame pointclouds with odom-time synchronisation for correct RViz overlay. Includes an **odom jump filter** to reject DiffDrive collision spikes (clamped to 0.6 m/s max velocity, 2.5 rad/s max yaw rate).
 
-### 5.4 Localization Node (`localization_node.py`)
+### 7.4 Localization Node (`localization_node.py`)
 
 **Scan-matched odometry** — corrects raw DiffDrive drift by matching LiDAR scans against the static map.
 
@@ -294,7 +450,7 @@ Also converts LiDAR scans to world-frame pointclouds with odom-time synchronisat
 - `/robot_pose` — corrected pose in the map frame
 - `/robot_pose_gt` — raw odom-only pose (for comparison)
 
-### 5.5 Human Mover (`move_humans.py`)
+### 7.5 Human Mover (`move_humans.py`)
 
 Animates **5 human models** in Gazebo along pre-defined waypoint loops via the `SetEntityPose` service. Each human's motion pattern is designed to trigger a specific social navigation case:
 
@@ -311,7 +467,7 @@ Animates **5 human models** in Gazebo along pre-defined waypoint loops via the `
 - `/detected_humans` (`PoseArray`) — same positions (consumed by planners)
 - `/human_velocities` (`PoseArray`) — instantaneous velocity vectors (vx, vy)
 
-### 5.6 Human Detector (Red) (`human_detector_red.py`)
+### 7.6 Human Detector (Red) (`human_detector_red.py`)
 
 Vision-based human detection using **HSV red-colour thresholding** on 4 camera feeds.
 
@@ -331,11 +487,11 @@ Vision-based human detection using **HSV red-colour thresholding** on 4 camera f
 - Rejects implausible speed jumps (> 1.5 m/s) to handle sensor noise.
 - Optional **LiDAR fusion**: when a LiDAR ray aligns with a camera-detection bearing (within ±0.15 rad), the more-accurate LiDAR range replaces the pinhole estimate.
 
-### 5.7 Camera View 360 (`camera_view_360.py`)
+### 7.7 Camera View 360 (`camera_view_360.py`)
 
 Combines the 4 directional camera feeds into a **2×2 panoramic grid** image (front/right/left/back) and publishes on `/camera/panorama`. Uses OpenCV for resizing and compositing; shows placeholder labels when a camera feed is not yet available.
 
-### 5.8 Weighted Grid Module (`weighted_grid.py`)
+### 7.8 Weighted Grid Module (`weighted_grid.py`)
 
 A pure-Python **edge-weighted graph** on an 8-connected 2D grid. This is the core data structure used by the global planner.
 
@@ -356,7 +512,7 @@ edge_cost(A → B) = move_distance(A, B) × base_weight[B] × dynamic_weight[B]
 | `simplify_path(grid_path)` | Grid→world conversion, line-of-sight pruning (remove A\* staircase), corner smoothing |
 | `to_occupancy_data()` | Export weighted grid as list for RViz OccupancyGrid visualization |
 
-### 5.9 Global Planner (`global_planner.py`)
+### 7.9 Global Planner (`global_planner.py`)
 
 Owns the `WeightedGrid` and orchestrates A\* path planning.
 
@@ -374,7 +530,7 @@ Owns the `WeightedGrid` and orchestrates A\* path planning.
 - `/path_markers` (`MarkerArray`) — path line, start/goal spheres, distance label
 - `/global_planner_status` (`Bool`) — success/failure notification
 
-### 5.10 Local Planner (`local_planner.py`)
+### 7.10 Local Planner (`local_planner.py`)
 
 A **reactive** path follower with WAIT / REROUTE human-avoidance (used in the legacy `astar_navigation.launch.py`).
 
@@ -397,7 +553,7 @@ A **reactive** path follower with WAIT / REROUTE human-avoidance (used in the le
 
 **Rerouting:** Publishes weight zones along the human's current + predicted trajectory (using `predict_horizon` = 3 s) on `/weight_zones` and sends `/replan_request` to the global planner. A 6 s cooldown prevents replan spam. A 20 s grace period after receiving a replanned path uses a tighter threat threshold so the robot follows the detour without re-triggering.
 
-### 5.11 Social Navigation Planner (`social_nav_planner.py`)
+### 7.11 Social Navigation Planner (`social_nav_planner.py`)
 
 The **primary planner** for the refactored architecture. A case-based social navigation controller with **velocity obstacle (VO) collision cone** computation and rich RViz visualisation. Runs at **10 Hz**.
 
@@ -442,7 +598,7 @@ When the rover's current path enters any human's social circle:
 - Decision banner (floating text above robot: case + action)
 - Speed readout
 
-### 5.12 Human Case Controller (`human_case_controller.py`)
+### 7.12 Human Case Controller (`human_case_controller.py`)
 
 Ground-truth human injector for **isolated planning tests**. Replaces both `human_detector_red` AND `move_humans` for single-case testing.
 
@@ -463,7 +619,7 @@ Animates **one human model** in Gazebo via `SetEntityPose` and publishes perfect
 | `case6c` | (3, 2.5) | (−0.3, −0.15) | Diagonal from upper-right |
 | `case6d` | (3, −2.5) | (−0.3, 0.15) | Diagonal from lower-right |
 
-### 5.13 Live Visualization Node (`live_visualization_node.py`)
+### 7.13 Live Visualization Node (`live_visualization_node.py`)
 
 Publishes **two complementary OccupancyGrid maps** and overlay markers for comparing ground truth vs robot perception in RViz:
 
@@ -480,11 +636,11 @@ Zone radii follow **Hall's proxemic zones:**
 - **Personal:** 1.2 m
 - **Social:** 3.0 m
 
-### 5.14 A\* Path Planner (Legacy) (`astar_path_planner.py`)
+### 7.14 A\* Path Planner (Legacy) (`astar_path_planner.py`)
 
 An earlier **monolithic** planner (~1600 lines) that combines grid building, A\* search, path following, human-aware replanning, and multiple candidate path selection in a single node. Features pure-pursuit path following with cross-track error correction. Maintained for backward compatibility with `astar_navigation.launch.py`. The refactored architecture splits these responsibilities across `weighted_grid.py`, `global_planner.py`, and `social_nav_planner.py`.
 
-### 5.15 World-to-Map Converter (`world_to_map.py`)
+### 7.15 World-to-Map Converter (`world_to_map.py`)
 
 Converts a Gazebo SDF `.world` file directly into a ROS 2 occupancy map (`.pgm` + `.yaml`) **without running Gazebo or SLAM**.
 
@@ -495,7 +651,7 @@ Rasterises each collision geometry onto a numpy grid using vectorised drawing fu
 
 ---
 
-## 6. Data Flow & Topic Map
+## 8. Data Flow & Topic Map
 
 | Topic                     | Type              | Publisher                  | Subscriber(s)                                    |
 |---------------------------|-------------------|----------------------------|--------------------------------------------------|
@@ -533,7 +689,7 @@ Weight zones are sent as `PoseArray` messages where each `Pose` encodes one zone
 
 ---
 
-## 7. Coordinate Frames (TF Tree)
+## 9. Coordinate Frames (TF Tree)
 
 ```
   map ──[static: spawn_x, spawn_y, spawn_yaw]──► odom
@@ -565,7 +721,7 @@ The **localization_node** additionally computes a scan-match correction offset t
 
 ---
 
-## 8. Social Navigation Cases
+## 10. Social Navigation Cases
 
 The `social_nav_planner` implements five distinct social navigation behaviours based on human motion classification:
 
@@ -614,7 +770,7 @@ EMERGENCY (< 0.3 m) > Case 1 > Case 2 = Case 5 > Case 3 (conflict)
 
 ---
 
-## 9. Planning Architecture — How A\* Rerouting Works
+## 11. Planning Architecture — How A\* Rerouting Works
 
 ```
  1. /map received → global_planner builds WeightedGrid (one time)
@@ -659,7 +815,7 @@ EMERGENCY (< 0.3 m) > Case 1 > Case 2 = Case 5 > Case 3 (conflict)
 
 ---
 
-## 10. Launch Files
+## 12. Launch Files
 
 | Launch File | Description | Key Nodes |
 |---|---|---|
@@ -672,7 +828,7 @@ EMERGENCY (< 0.3 m) > Case 1 > Case 2 = Case 5 > Case 3 (conflict)
 
 ---
 
-## 11. Gazebo Worlds
+## 13. Gazebo Worlds
 
 | World File | Description | Size |
 |---|---|---|
@@ -692,7 +848,7 @@ EMERGENCY (< 0.3 m) > Case 1 > Case 2 = Case 5 > Case 3 (conflict)
 
 ---
 
-## 12. Quick Start
+## 14. Quick Start
 
 ### Prerequisites
 
@@ -749,7 +905,7 @@ rviz2 -d scan_project/rviz_config.rviz
 
 ---
 
-## 13. Shell Scripts Reference
+## 15. Shell Scripts Reference
 
 | Script | Purpose |
 |---|---|
@@ -771,9 +927,9 @@ All scripts automatically:
 
 ---
 
-## 14. Key Parameters & Constants
+## 16. Key Parameters & Constants
 
-### 14.1 Social Navigation Constants (`social_nav_planner.py`)
+### 16.1 Social Navigation Constants (`social_nav_planner.py`)
 
 | Constant | Value | Unit | Meaning |
 |---|---|---|---|
@@ -793,7 +949,7 @@ All scripts automatically:
 | `EMERG_DIST` | 0.35 | m | LiDAR emergency stop distance |
 | `EMERG_ARC` | 0.52 | rad | Emergency stop angular window (±30°) |
 
-### 14.2 Global Planner Parameters
+### 16.2 Global Planner Parameters
 
 | Parameter | Default | Unit | Meaning |
 |---|---|---|---|
@@ -805,7 +961,7 @@ All scripts automatically:
 | `proactive_cooldown` | 10.0 | s | Minimum time between proactive replans |
 | `predict_horizon` | 3.0 | s | How far ahead to predict human positions |
 
-### 14.3 Localization Parameters
+### 16.3 Localization Parameters
 
 | Parameter | Default | Test Arena | Unit | Meaning |
 |---|---|---|---|---|
@@ -817,7 +973,7 @@ All scripts automatically:
 | `yaw_step` | 0.02 | 0.02 | rad | Yaw search resolution |
 | `max_scan_range` | 6.0 | 6.0 | m | Ignore rays beyond this |
 
-### 14.4 Local Planner Parameters
+### 16.4 Local Planner Parameters
 
 | Parameter | Default | Unit | Meaning |
 |---|---|---|---|
@@ -831,7 +987,7 @@ All scripts automatically:
 
 ---
 
-## 15. Troubleshooting
+## 17. Troubleshooting
 
 | Problem | Solution |
 |---|---|
@@ -847,4 +1003,47 @@ All scripts automatically:
 
 ---
 
-*Last updated: March 7, 2026*
+## 18. Project Report
+
+The project includes a LaTeX paper (`main.tex`) for the IRPP course submission:
+
+**Title:** *SCAN: Socially Compliant Autonomous Navigation — Vision Bots*
+
+The paper covers:
+- **System Overview** — Three-layer architecture (Perception → Localization → Planning)
+- **Perception Pipeline** — HSV-based human detection from 4 cameras with Kalman tracking
+- **Human Tracking** — Kalman filter state estimation for position and velocity
+- **Localization** — Correlative scan-matching to correct DiffDrive odometry drift
+- **Mapping** — Occupancy grid generation from Gazebo world files
+- **Global Path Planning** — A\* on edge-weighted grids with obstacle inflation
+- **Local Navigation** — Reactive path following with human avoidance
+- **Social Navigation Framework** — Proxemic zones (collision 0.5 m, personal 0.8 m, social 1.5 m)
+- **Human Interaction Cases** — Case 1 (static), Case 2 (head-on), Case 3 (crossing), Case 4 (same direction)
+- **Experimental Results** — Controlled simulation scenarios demonstrating safe social compliance
+
+### Compiling the Paper
+
+```bash
+pdflatex main.tex
+# Or with BibTeX references:
+pdflatex main.tex && bibtex main && pdflatex main.tex && pdflatex main.tex
+```
+
+---
+
+## Additional Documentation
+
+| Document | Description |
+|----------|-------------|
+| [README_ASTAR.md](README_ASTAR.md) | Complete A\* path planning guide |
+| [ASTAR_QUICKSTART.md](ASTAR_QUICKSTART.md) | Quick reference for A\* navigation |
+| [SYSTEM_FLOW.md](SYSTEM_FLOW.md) | Detailed data flow and architecture diagrams |
+| [IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md) | Implementation details and feature list |
+| [VISUAL_DEMO_GUIDE.md](VISUAL_DEMO_GUIDE.md) | Visual walkthrough of the system |
+| [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Common problems and solutions |
+| [DOCS_INDEX.md](DOCS_INDEX.md) | Documentation index / navigator |
+| [WORLD_TO_MAP_GUIDE.md](WORLD_TO_MAP_GUIDE.md) | Guide for converting Gazebo worlds to maps |
+
+---
+
+*Last updated: March 8, 2026*
