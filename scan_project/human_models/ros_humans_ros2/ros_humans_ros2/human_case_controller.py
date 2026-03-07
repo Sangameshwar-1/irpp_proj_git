@@ -18,6 +18,11 @@ the scenario:
   case3  — human at ( 0.0,  2.0)         vel ( 0.00, -0.15)  [crossing]
   case4a — human at (-1.0,  0.0)         vel ( 0.20,  0.00)  [ahead, same dir]
   case4b — human at (-5.0,  0.0)         vel ( 0.40,  0.00)  [behind, faster]
+  case5  — human at (-7.0,  0.0)         vel ( 0.60,  0.00)  [behind, much faster]
+  case6a — human at (-1.0,  3.5)         vel ( 0.20, -0.30)  [diagonal upper-left]
+  case6b — human at (-1.0, -3.5)         vel ( 0.20,  0.30)  [diagonal lower-left]
+  case6c — human at ( 3.0,  2.5)         vel (-0.30, -0.15)  [diagonal upper-right]
+  case6d — human at ( 3.0, -2.5)         vel (-0.30,  0.15)  [diagonal lower-right]
 
 Topics
 ------
@@ -72,6 +77,36 @@ CASES = {
         "pos": (-5.0,  0.0),
         "vel": ( 0.4,  0.0),
         "yaw":  0.0,
+    },
+    "case5": {
+        "desc": "Human from behind, much faster — replan to move aside",
+        "pos": (-7.0,  0.0),
+        "vel": ( 0.60,  0.0),
+        "yaw":  0.0,
+    },
+    "case6a": {
+        "desc": "Diagonal crossing from upper-left (moving down-right)",
+        "pos": (-1.0,  3.5),
+        "vel": ( 0.20, -0.30),
+        "yaw":  math.atan2(-0.30, 0.20),
+    },
+    "case6b": {
+        "desc": "Diagonal crossing from lower-left (moving up-right)",
+        "pos": (-1.0, -3.5),
+        "vel": ( 0.20,  0.30),
+        "yaw":  math.atan2(0.30, 0.20),
+    },
+    "case6c": {
+        "desc": "Diagonal approach from upper-right (moving down-left toward robot)",
+        "pos": ( 3.0,  2.5),
+        "vel": (-0.30, -0.15),
+        "yaw":  math.atan2(-0.15, -0.30),
+    },
+    "case6d": {
+        "desc": "Diagonal approach from lower-right (moving up-left toward robot)",
+        "pos": ( 3.0, -2.5),
+        "vel": (-0.30,  0.15),
+        "yaw":  math.atan2(0.15, -0.30),
     },
 }
 

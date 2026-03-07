@@ -9,6 +9,11 @@
 #    ./run_test_case.sh case3    — human crossing (collision cone)
 #    ./run_test_case.sh case4a   — human ahead, same direction
 #    ./run_test_case.sh case4b   — human behind, faster (give way)
+#    ./run_test_case.sh case5    — fast human from behind (replan)
+#    ./run_test_case.sh case6a   — diagonal crossing from upper-left
+#    ./run_test_case.sh case6b   — diagonal crossing from lower-left
+#    ./run_test_case.sh case6c   — diagonal approach from upper-right
+#    ./run_test_case.sh case6d   — diagonal approach from lower-right
 #
 #  Prerequisites:
 #    1. Workspace built:
@@ -157,11 +162,61 @@ case "$CASE" in
   so the faster human can overtake safely."
         ;;
 
+    case5)
+        SPAWN_X=-4.0; SPAWN_Y=0.0; SPAWN_YAW=0.0
+        GOAL_X=5.0;   GOAL_Y=0.0
+        LABEL="CASE 5 — Fast Human From Behind (Replan)"
+        EXPECT="Human starts at (-7.0, 0) moving RIGHT at 0.60 m/s (same direction, behind).
+  Human is TWICE the robot speed (0.30 m/s) and will catch up in ~10 s.
+  Expected: When human enters the social circle (blue ring, 1.5 m),
+  robot REPLANS its path to move aside and let the human pass."
+        ;;
+
+    case6a)
+        SPAWN_X=-4.0; SPAWN_Y=0.0; SPAWN_YAW=0.0
+        GOAL_X=5.0;   GOAL_Y=0.0
+        LABEL="CASE 6a — Diagonal Crossing (Upper-Left)"
+        EXPECT="Human starts at (-1.0, 3.5) moving diagonally DOWN-RIGHT
+  at vel (0.20, -0.30) m/s — crosses the robot's straight-line path.
+  Expected: Robot detects diagonal crossing via collision cone,
+  SLOWS or REPLANS to pass BEHIND the human."
+        ;;
+
+    case6b)
+        SPAWN_X=-4.0; SPAWN_Y=0.0; SPAWN_YAW=0.0
+        GOAL_X=5.0;   GOAL_Y=0.0
+        LABEL="CASE 6b — Diagonal Crossing (Lower-Left)"
+        EXPECT="Human starts at (-1.0, -3.5) moving diagonally UP-RIGHT
+  at vel (0.20, 0.30) m/s — crosses the robot's straight-line path.
+  Expected: Robot detects diagonal crossing via collision cone,
+  SLOWS or REPLANS to pass BEHIND the human."
+        ;;
+
+    case6c)
+        SPAWN_X=-4.0; SPAWN_Y=0.0; SPAWN_YAW=0.0
+        GOAL_X=5.0;   GOAL_Y=0.0
+        LABEL="CASE 6c — Diagonal Approach (Upper-Right)"
+        EXPECT="Human starts at (3.0, 2.5) moving diagonally DOWN-LEFT
+  at vel (-0.30, -0.15) m/s — approaches robot from upper-right.
+  Expected: Robot SLOWS as human enters social zone, then REPLANS
+  to avoid collision when entering social circle."
+        ;;
+
+    case6d)
+        SPAWN_X=-4.0; SPAWN_Y=0.0; SPAWN_YAW=0.0
+        GOAL_X=5.0;   GOAL_Y=0.0
+        LABEL="CASE 6d — Diagonal Approach (Lower-Right)"
+        EXPECT="Human starts at (3.0, -2.5) moving diagonally UP-LEFT
+  at vel (-0.30, 0.15) m/s — approaches robot from lower-right.
+  Expected: Robot SLOWS as human enters social zone, then REPLANS
+  to avoid collision when entering social circle."
+        ;;
+
     *)
         echo ""
         echo "Unknown case: '$CASE'"
         echo ""
-        echo "Valid cases: case1  case2  case3  case4a  case4b"
+        echo "Valid cases: case1  case2  case3  case4a  case4b  case5  case6a  case6b  case6c  case6d"
         echo "Usage:       ./run_test_case.sh <case>"
         echo "Map gen:     ./run_test_case.sh --gen-map"
         echo ""

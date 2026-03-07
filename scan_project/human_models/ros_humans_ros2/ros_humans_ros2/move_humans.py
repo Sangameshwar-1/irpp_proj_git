@@ -21,83 +21,102 @@ class HumanMover(Node):
         super().__init__("move_humans")
         self.declare_parameter("rate", 10.0)
         self.declare_parameter("world", "large_messy_room")
-        
-        # All waypoints MUST be within valid movable region [-10, 10]
+
+        # ── Social-nav case humans (all on robot path: spawn 0,-8 → goal 5,5) ──
+        # Case 1 — near-static blocker: sits on the path, speed < STATIC_THR
+        # Case 2 — head-on:             approaches robot from north along path
+        # Case 3 — crossing:            east-west across robot's north-bound path
+        # Case 4a — ahead same dir:     slower human just ahead of robot
+        # Case 5  — fast from behind:   faster human overtaking from behind
         default_humans = [
-            # 1. Horizontal patrol across room center (avoids obstacles)
+            # Case 1: near-stationary blocker at (1,-2) on the robot path
             {
                 "name": "human_moving_1",
-                "speed": 0.4,
+                "speed": 0.03,      # < STATIC_THR=0.05 → classified case1
                 "waypoints": [
-                    [-7.0, 2.0, 0.0],           # West side
-                    [7.0, 2.0, math.pi],        # East side
-                    [7.0, 2.0, math.pi],        # Turn
-                    [-7.0, 2.0, 0.0],           # Back west
+                    [1.0, -2.0, 0.0],
+                    [1.2, -2.0, math.pi],
+                    [1.2, -2.0, math.pi],
+                    [1.0, -2.0, 0.0],
                 ],
             },
-            # 2. Vertical patrol on east side
+            # Case 2: head-on — walks south along the robot's expected path
+            # Start at y=6 (further north) so the human is still heading SOUTH
+            # when the robot arrives at mid-room (~y=-2, t≈22s).  With y=4 the
+            # human would reach its south waypoint at y=-5 in only 11/0.35=31s
+            # giving plenty of margin; starting at y=6 adds ~6s more runway.
             {
                 "name": "human_moving_2",
                 "speed": 0.35,
                 "waypoints": [
-                    [5.0, -7.0, math.pi / 2.0],   # South
-                    [5.0, 7.0, -math.pi / 2.0],   # North
-                    [5.0, 7.0, -math.pi / 2.0],   # Turn
-                    [5.0, -7.0, math.pi / 2.0],   # Back south
+                    [1.5,  6.0, -math.pi / 2.0],   # north end, heading south
+                    [1.5, -5.0,  math.pi / 2.0],   # south end, heading north
+                    [1.5, -5.0,  math.pi / 2.0],
+                    [1.5,  6.0, -math.pi / 2.0],
                 ],
             },
-            # 3. Random walker around center (avoiding obstacles)
+            # Case 3: crossing — east-west across robot's northbound path at y≈1
             {
                 "name": "human_moving_3",
-                "speed": 0.3,
+                "speed": 0.45,
                 "waypoints": [
-                    [0.0, 4.0, -math.pi / 4.0],
-                    [4.0, 1.0, -math.pi / 2.0],
-                    [2.0, -3.0, math.pi],
-                    [-3.0, -1.0, math.pi / 2.0],
-                    [-3.0, 3.0, 0.0],
-                    [0.0, 4.0, -math.pi / 4.0],
+                    [-7.0, 1.0,  0.0],          # west, heading east
+                    [ 7.0, 1.0,  math.pi],      # east, heading west
+                    [ 7.0, 1.0,  math.pi],
+                    [-7.0, 1.0,  0.0],
                 ],
             },
-            # 4. Diagonal walker (staying in valid region)
+            # Case 4a: same direction ahead — slower, robot will catch up
             {
                 "name": "human_moving_4",
-                "speed": 0.35,
+                "speed": 0.22,      # slower than rover (0.30) → case4a when ahead
                 "waypoints": [
-                    [-5.0, -5.0, math.pi / 4.0],
-                    [5.0, 5.0, -3 * math.pi / 4.0],
-                    [5.0, 5.0, -3 * math.pi / 4.0],
-                    [-5.0, -5.0, math.pi / 4.0],
+                    [ 0.5, -5.0,  math.pi / 4.0],
+                    [ 4.5,  4.0, -3.0 * math.pi / 4.0],
+                    [ 4.5,  4.0, -3.0 * math.pi / 4.0],
+                    [ 0.5, -5.0,  math.pi / 4.0],
                 ],
             },
-            # 5. Perimeter walker (inside walls)
+            # Case 5: fast from behind — same NE direction, faster than rover
+            # Start at y=-12 (4m behind robot spawn y=-8).  Relative overtake
+            # speed ≈ 0.28 m/s → ~14s to close, giving a clear observation
+            # window before the human passes. (y=-9 was only 1m behind = 4s)
             {
                 "name": "human_moving_5",
-                "speed": 0.4,
+                "speed": 0.58,      # faster than rover (0.30) → case5 when behind
                 "waypoints": [
-                    [7.0, 0.0, math.pi / 2.0],
-                    [4.0, 7.0, math.pi],
-                    [-4.0, 6.0, -math.pi],
-                    [-7.0, 0.0, -math.pi / 2.0],
-                    [-4.0, -6.0, 0.0],
-                    [4.0, -7.0, math.pi / 2.0],
-                    [7.0, 0.0, math.pi / 2.0],
+                    [ 0.5, -12.0,  math.pi / 2.0],
+                    [ 0.5,   9.0, -math.pi / 2.0],
+                    [ 0.5,   9.0, -math.pi / 2.0],
+                    [ 0.5, -12.0,  math.pi / 2.0],
                 ],
             },
         ]
         self.declare_parameter("humans_json", json.dumps(default_humans))
+        # publish_detections=True  → GT mode: publishes /detected_humans + /human_velocities
+        # publish_detections=False → camera mode: only teleports humans; perception via camera
+        self.declare_parameter("publish_detections", True)
         self.rate_hz = self.get_parameter("rate").get_parameter_value().double_value
         self.world = self.get_parameter("world").get_parameter_value().string_value
         humans_json = self.get_parameter("humans_json").get_parameter_value().string_value
         self.humans = json.loads(humans_json)
+        self._publish_detections = (
+            self.get_parameter("publish_detections").get_parameter_value().bool_value
+        )
 
         service_name = f"/world/{self.world}/set_pose"
         self.client = self.create_client(SetEntityPose, service_name)
         while not self.client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info(f"Waiting for {service_name}...")
 
-        # Ground truth publisher — lets visualization node compare GT vs detected
+        # Ground truth publisher (for live_visualization_node — always active)
         self.gt_pub = self.create_publisher(PoseArray, '/human_ground_truth', 10)
+        # Social nav planner inputs (only published in GT mode)
+        self.det_pub = self.create_publisher(PoseArray, '/detected_humans', 10)
+        self.vel_pub = self.create_publisher(PoseArray, '/human_velocities', 10)
+
+        mode_str = "GT injection" if self._publish_detections else "camera mode (teleport only)"
+        self.get_logger().info(f"move_humans perception mode: {mode_str}")
 
         self.state = {}
         self._init_segments()
@@ -142,6 +161,17 @@ class HumanMover(Node):
         y = ay + (by - ay) * t
         yaw = ayaw + (byaw - ayaw) * t
 
+        # Instantaneous velocity from current segment
+        seg_dx = bx - ax
+        seg_dy = by - ay
+        seg_dist = math.hypot(seg_dx, seg_dy)
+        spd = human["speed"]
+        if seg_dist > 0.01:
+            vx = (seg_dx / seg_dist) * spd
+            vy = (seg_dy / seg_dist) * spd
+        else:
+            vx, vy = 0.0, 0.0
+
         qx, qy, qz, qw = _quat_from_yaw(yaw)
         pose = Pose()
         pose.position.x = float(x)
@@ -160,22 +190,50 @@ class HumanMover(Node):
         req.entity = entity
         req.pose = pose
         self.client.call_async(req)
-        return (x, y)
+        return (x, y, vx, vy)
 
     def _tick(self):
         now = float(self.get_clock().now().seconds_nanoseconds()[0])
-        gt_msg = PoseArray()
-        gt_msg.header.frame_id = 'map'
-        gt_msg.header.stamp = self.get_clock().now().to_msg()
+        stamp = self.get_clock().now().to_msg()
+
+        gt_msg  = PoseArray()
+        det_msg = PoseArray()
+        vel_msg = PoseArray()
+        gt_msg.header.frame_id  = 'map'
+        det_msg.header.frame_id = 'map'
+        vel_msg.header.frame_id = 'map'
+        gt_msg.header.stamp  = stamp
+        det_msg.header.stamp = stamp
+        vel_msg.header.stamp = stamp
+
         for human in self.humans:
-            pos = self._update_human(human, now)
-            if pos is not None:
-                p = Pose()
-                p.position.x = pos[0]
-                p.position.y = pos[1]
-                p.position.z = 0.0
-                gt_msg.poses.append(p)
+            result = self._update_human(human, now)
+            if result is None:
+                continue
+            x, y, vx, vy = result
+
+            # /human_ground_truth (for live_visualization_node)
+            pg = Pose()
+            pg.position.x = x
+            pg.position.y = y
+            gt_msg.poses.append(pg)
+
+            # /detected_humans — position for social_nav_planner
+            pd = Pose()
+            pd.position.x = x
+            pd.position.y = y
+            det_msg.poses.append(pd)
+
+            # /human_velocities — velocity for social_nav_planner
+            pv = Pose()
+            pv.position.x = vx
+            pv.position.y = vy
+            vel_msg.poses.append(pv)
+
         self.gt_pub.publish(gt_msg)
+        if self._publish_detections:
+            self.det_pub.publish(det_msg)
+            self.vel_pub.publish(vel_msg)
 
 
 def main():

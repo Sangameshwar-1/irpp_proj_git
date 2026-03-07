@@ -21,8 +21,9 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}  ROS2 Navigation (Refactored)          ${NC}"
-echo -e "${BLUE}  Global + Local Planner Architecture   ${NC}"
+echo -e "${BLUE}  ROS2 Navigation (Social Nav Planner)  ${NC}"
+echo -e "${BLUE}  Global Planner + Social Nav Planner   ${NC}"
+echo -e "${BLUE}  Usage: $0 [camera|no_camera] [x] [y] ${NC}"
 echo -e "${BLUE}========================================${NC}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -33,9 +34,18 @@ WORLD_NAME="large_messy_room"
 MAP_DIR="$HOME/ros2_maps"
 MAP_YAML="$MAP_DIR/${WORLD_NAME}_map.yaml"
 
-# Default goal (can be overridden with arguments)
-GOAL_X="${1:-5.0}"
-GOAL_Y="${2:-5.0}"
+# Perception mode: 'camera' = HSV+Kalman via human_detector_red
+#                  'no_camera' = GT injection via move_humans (default)
+PERCEPTION="${1:-no_camera}"
+if [[ "$PERCEPTION" != "camera" && "$PERCEPTION" != "no_camera" ]]; then
+    echo -e "${RED}Error: first argument must be 'camera' or 'no_camera'${NC}"
+    echo -e "${YELLOW}Usage: $0 [camera|no_camera] [goal_x] [goal_y]${NC}"
+    exit 1
+fi
+
+# Default goal (can be overridden with 2nd/3rd arguments)
+GOAL_X="${2:-5.0}"
+GOAL_Y="${3:-5.0}"
 
 # ── Source ROS 2 ──────────────────────────────────────────────────────
 echo -e "${YELLOW}Sourcing ROS 2 Jazzy...${NC}"
@@ -89,16 +99,26 @@ echo -e "${BLUE}─────────────────────�
 echo -e "${CYAN}Step 1: Launching navigation stack${NC}"
 echo -e "${BLUE}────────────────────────────────────────${NC}"
 echo -e "${YELLOW}  Goal: ($GOAL_X, $GOAL_Y)${NC}"
+echo -e "${YELLOW}  Perception:${NC}"
+if [[ "$PERCEPTION" == "camera" ]]; then
+    echo -e "${YELLOW}    • Mode: CAMERA  (HSV red-blob + Kalman tracker)${NC}"
+    echo -e "${YELLOW}    • human_detector_red reads 4 bridged cameras${NC}"
+    echo -e "${YELLOW}    • move_humans: teleport-only (no GT publishing)${NC}"
+else
+    echo -e "${YELLOW}    • Mode: NO_CAMERA  (ground-truth injection)${NC}"
+    echo -e "${YELLOW}    • move_humans publishes /detected_humans + /human_velocities${NC}"
+    echo -e "${YELLOW}    • Reliable for all 5 social cases${NC}"
+fi
 echo -e "${YELLOW}  Architecture:${NC}"
 echo -e "${YELLOW}    • Localization Node  → /robot_pose${NC}"
 echo -e "${YELLOW}    • Global Planner     → A* on weighted grid${NC}"
-echo -e "${YELLOW}    • Local Planner      → WAIT / REROUTE${NC}"
-echo -e "${YELLOW}    • Human Detector     → red shapes only${NC}"
+echo -e "${YELLOW}    • Social Nav Planner → case-based VO${NC}"
 
 ros2 launch ros_humans_ros2 navigation.launch.py \
     map_yaml:="$MAP_YAML" \
     default_goal_x:="$GOAL_X" \
-    default_goal_y:="$GOAL_Y" &
+    default_goal_y:="$GOAL_Y" \
+    perception_mode:="$PERCEPTION" &
 LAUNCH_PID=$!
 
 echo -e "${GREEN}Navigation launched (PID: $LAUNCH_PID)${NC}"
@@ -125,10 +145,11 @@ echo -e "${CYAN}    ros2 topic pub /goal_pose geometry_msgs/PoseStamped \\${NC}"
 echo -e "${CYAN}      '{pose: {position: {x: 5.0, y: 5.0}}}'${NC}"
 echo ""
 echo -e "${CYAN}  Topics to watch:${NC}"
-echo -e "${CYAN}    /robot_pose        – localised pose${NC}"
-echo -e "${CYAN}    /global_path       – planned path${NC}"
-echo -e "${CYAN}    /weighted_grid_viz – edge weights visualisation${NC}"
-echo -e "${CYAN}    /detected_humans   – red-shape detections${NC}"
+echo -e "${CYAN}    /robot_pose           – localised pose${NC}"
+echo -e "${CYAN}    /global_path          – planned path${NC}"
+echo -e "${CYAN}    /weighted_grid_viz    – edge weights visualisation${NC}"
+echo -e "${CYAN}    /detected_humans      – human detections (GT or camera)${NC}"
+echo -e "${CYAN}    /human_ground_truth   – raw GT positions (always published)${NC}"
 echo ""
 
 wait $LAUNCH_PID

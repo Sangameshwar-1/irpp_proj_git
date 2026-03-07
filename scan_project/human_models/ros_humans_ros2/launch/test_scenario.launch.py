@@ -195,22 +195,22 @@ def _launch_setup(context, *args, **kwargs):
                            "room_max_x": room_max_x,
                            "room_min_y": room_min_y,
                            "room_max_y": room_max_y,
+                           # Proactive monitoring: replan if human is near path
+                           "proactive_replan_radius": 0.75,
+                           "proactive_zone_radius":   0.80,
+                           "proactive_weight":       20.0,
+                           "proactive_cooldown":      5.0,
                            "use_sim_time": True}]),
 
-        # Local planner (path following + WAIT / REROUTE)
-        Node(package="ros_humans_ros2", executable="local_planner",
-             name="local_planner", output="screen",
-             parameters=[{"linear_speed": 0.3,
-                           "angular_speed": 0.5,
-                           "waypoint_tolerance": 0.3,
-                           "human_threat_dist": 3.0,
-                           "human_zone_radius": 1.5,
-                           "weight_multiplier": 10.0,
-                           "max_wait_time": 8.0,
-                           "crossing_clear_time": 5.0,
-                           "predict_horizon": 3.0,
-                           "emergency_stop_dist": 0.4,
-                           "use_sim_time": True}]),
+        # Social nav planner — replaces local_planner for all scenarios
+        # Uses /detected_humans from human_detector_red (camera perception)
+        # Falls back to zero velocity when /human_velocities not published
+        # ⇒ static humans auto-classified as case1 (blocker)
+        Node(package="ros_humans_ros2", executable="social_nav_planner",
+             name="social_nav_planner", output="screen",
+             parameters=[{"max_speed":     0.30,
+                           "angular_speed": 0.30,
+                           "use_sim_time":  True}]),
 
         # Live visualization (GT + perception maps + social circles)
         Node(package="ros_humans_ros2", executable="live_visualization_node",

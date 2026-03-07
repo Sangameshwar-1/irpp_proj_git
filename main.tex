@@ -1,0 +1,267 @@
+\documentclass[a4paper]{article}
+\usepackage{graphicx}
+\usepackage{twocolceurws}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{microtype}
+\pagestyle{empty}
+
+\title{SCAN: Socially Compliant Autonomous Navigation\\
+Vision Bots}
+
+\author{
+JAI SRIKAR M \\ 2024102041 \\
+jaisrikar.m@students.iiit.ac.in \\
+\and
+RITHIK REDDY P \\ 2024102005 \\
+rithik.palla@students.iiit.ac.in \\
+\and
+S SANGAMESHWAR \\ 2024102017 \\
+sale.sangameshwar@students.iiit.ac.in \\
+}
+
+\institution{Intro To Robotics: Perception and Planning, Spring 2026}
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+
+
+\begin{abstract}
+Socially aware navigation is essential for robots operating in human environments where safety, predictability, and comfort are important. In this project we present \textbf{SCAN (Socially Compliant Autonomous Navigation)}, a complete navigation system implemented on a TurtleBot3 platform in Gazebo using ROS~2. The system integrates vision-based human detection, scan-matched odometry for localization, global path planning using the A* algorithm, and a socially-aware local navigation module that adapts robot behaviour based on human motion. The planner classifies human interactions into four behavioural cases including static obstruction, head-on approach, path crossing, and same-direction motion. For each case the robot adjusts speed, path, or trajectory to maintain socially acceptable distances and avoid uncomfortable interactions. The system is evaluated through a series of controlled simulation scenarios demonstrating safe and socially compliant navigation in dynamic environments with moving humans.
+\end{abstract}
+
+
+\section{Introduction}
+
+% Explain the motivation for socially aware navigation.
+% Describe why robots must consider human comfort and safety.
+% Introduce the SCAN system and what problem it solves.
+% Briefly summarize the key components of the system.
+
+
+\section{System Overview}
+
+% Provide a high level description of the system.
+% Explain the three main subsystems:
+% 1. Perception
+% 2. Localization
+% 3. Planning
+% Describe how these components interact to produce robot motion.
+
+\begin{figure}[h]
+\begin{center}
+\setlength{\unitlength}{1pt}
+\begin{picture}(200,80)
+\put(0,0){\framebox(200,80){}}
+\end{picture}
+\caption{System architecture of the SCAN navigation pipeline showing perception, localization, planning, and control layers.}
+\end{center}
+\end{figure}
+
+
+
+\section{System Architecture}
+
+% Describe the ROS node architecture.
+% Explain the main nodes in the system and their responsibilities.
+% Explain the topic communication between nodes.
+
+\begin{figure}[h]
+\begin{center}
+\setlength{\unitlength}{1pt}
+\begin{picture}(200,80)
+\put(0,0){\framebox(200,80){}}
+\end{picture}
+\caption{ROS node graph illustrating topic communication between perception, localization, and planning nodes.}
+\end{center}
+\end{figure}
+
+
+
+\section{Perception Pipeline}
+
+% Explain how humans are detected.
+% Describe the camera configuration and 360-degree coverage.
+% Explain the image processing pipeline including:
+% RGB to HSV conversion
+% color thresholding
+% contour detection
+% position estimation
+
+\begin{figure}[h]
+\begin{center}
+\setlength{\unitlength}{1pt}
+\begin{picture}(200,80)
+\put(0,0){\framebox(200,80){}}
+\end{picture}
+\caption{Human detection pipeline from camera images to world-frame position estimation.}
+\end{center}
+\end{figure}
+
+
+
+\section{Human Tracking}
+
+% Describe the tracking algorithm used after detection.
+% Explain the use of Kalman filtering.
+% Describe how human positions and velocities are estimated over time.
+% Explain the role of tracking in stable navigation behaviour.
+
+
+
+\section{Localization}
+
+% Explain the need for localization correction.
+% Describe the scan-matching algorithm used to correct odometry drift.
+% Explain the steps of the algorithm and how pose correction is computed.
+
+\begin{figure}[h]
+\begin{center}
+\setlength{\unitlength}{1pt}
+\begin{picture}(200,80)
+\put(0,0){\framebox(200,80){}}
+\end{picture}
+\caption{Scan matching process used to correct odometry drift using LiDAR observations.}
+\end{center}
+\end{figure}
+
+
+
+\section{Mapping and Environment Representation}
+
+% Explain the use of occupancy grid maps.
+% Describe how maps are generated from Gazebo world files.
+% Explain obstacle inflation and map resolution.
+
+
+
+\section{Global Path Planning}
+
+% Describe the A* algorithm used for global path planning.
+% Explain grid representation, heuristic function, and path generation.
+% Describe how dynamic weight zones are introduced around humans.
+
+\begin{figure}[h]
+\begin{center}
+\setlength{\unitlength}{1pt}
+\begin{picture}(200,80)
+\put(0,0){\framebox(200,80){}}
+\end{picture}
+\caption{Example global path produced by the A* planner on the occupancy grid map.}
+\end{center}
+\end{figure}
+
+
+
+\section{Local Navigation}
+
+% Explain how the robot follows the global path.
+% Describe the reactive local navigation controller.
+% Explain how local adjustments are made in the presence of humans.
+
+
+
+\section{Social Navigation Framework}
+
+% Introduce the concept of proxemic zones around humans.
+% Define the collision, personal, and social zones.
+% Explain how these zones influence robot behaviour.
+
+\begin{figure}[h]
+\begin{center}
+\setlength{\unitlength}{1pt}
+\begin{picture}(200,80)
+\put(0,0){\framebox(200,80){}}
+\end{picture}
+\caption{Human proxemic zones used for socially aware navigation (collision, personal, and social zones).}
+\end{center}
+\end{figure}
+
+
+
+\section{Human Interaction Cases}
+
+% Describe the classification of human-robot interaction scenarios.
+% Explain the logic used to detect different interaction cases.
+
+
+\subsection{Case 1: Static Human Blocking Path}
+
+% Explain how the robot handles a stationary human blocking the path.
+% Describe the rerouting behaviour using weight zones.
+
+
+\subsection{Case 2: Head-On Interaction}
+
+% Explain the head-on human scenario.
+% Describe how robot speed is reduced based on distance.
+
+
+\subsection{Case 3: Crossing Human}
+
+% Explain the crossing path scenario.
+% Describe the time-to-cross calculation and speed adjustment.
+% Explain how the robot allows the human to pass first.
+
+
+\subsection{Case 4: Same Direction Motion}
+
+% Describe scenarios where the robot and human move in the same direction.
+% Explain both following behaviour and giving way behaviour.
+
+
+
+\section{Experimental Setup}
+
+% Describe the simulation environment in Gazebo.
+% Explain the test arena configuration.
+% Describe the initial positions of the robot and humans.
+
+
+
+\section{Experimental Results}
+
+% Present the results of running each navigation scenario.
+% Include observations about robot behaviour in each case.
+% Discuss how the robot maintained safe distances and socially compliant motion.
+
+\begin{figure}[h]
+\begin{center}
+\setlength{\unitlength}{1pt}
+\begin{picture}(200,80)
+\put(0,0){\framebox(200,80){}}
+\end{picture}
+\caption{Example robot trajectory during a crossing scenario showing speed adjustment and safe human passage.}
+\end{center}
+\end{figure}
+
+
+
+\section{Discussion}
+
+% Analyze the strengths of the SCAN system.
+% Discuss how social constraints improve navigation behaviour.
+% Mention limitations such as perception assumptions or simulation constraints.
+
+
+
+\section{Conclusion}
+
+% Summarize the main contributions of the project.
+% Recap how the system integrates perception, localization, planning, and social behaviour.
+% Mention possible future improvements.
+
+
+
+\section{References}
+
+% Add references for:
+% ROS2
+% A* algorithm
+% Social navigation / proxemics research
+% Robotics navigation literature
+
+
+\end{document}

@@ -1,7 +1,7 @@
 """
-Navigation Launch File (Refactored Architecture)
-=================================================
-Launches the complete navigation stack with separated concerns:
+Navigation Launch File — Large World (Social Nav Planner)
+=========================================================
+Launches the complete navigation stack with social-aware planner:
 
     ┌──────────────────┐
     │  Gazebo + Bridges │  (simulation + sensor data)
@@ -16,28 +16,32 @@ Launches the complete navigation stack with separated concerns:
              ▼                          ▼
     ┌──────────────────────────────────────────────┐
     │             global_planner                    │
-    │  (A* on weighted grid → /global_path)        │
+    │  (A* + proactive replan → /global_path)      │
     │  Receives /weight_zones + /replan_request    │
     └────────────────────┬─────────────────────────┘
                          │
                          ▼
     ┌──────────────────────────────────────────────┐
-    │              local_planner                    │
-    │  (follows path, WAIT / REROUTE decisions)    │
+    │          social_nav_planner                   │
+    │  (case-based VO, cone speed, directional      │
+    │   routing, exit-replan, parallel turns)       │
     │  → /cmd_vel,  → /weight_zones + /replan_req  │
     └──────────────────────────────────────────────┘
                          ▲
-                         │ /detected_humans
+              /detected_humans  /human_velocities
     ┌──────────────────────────────────────────────┐
-    │          human_detector_red                   │
-    │  (red-shape detection from cameras)          │
+    │              move_humans                      │
+    │  (GT positions + velocities for 5 cases:     │
+    │   case1 static, case2 head-on, case3 cross,  │
+    │   case4a ahead, case5 fast-behind)            │
     └──────────────────────────────────────────────┘
 """
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node, SetParameter
 from ament_index_python.packages import get_package_share_directory
 import os
@@ -52,6 +56,11 @@ def generate_launch_description():
     default_goal_x = LaunchConfiguration("default_goal_x")
     default_goal_y = LaunchConfiguration("default_goal_y")
     map_yaml = LaunchConfiguration("map_yaml")
+    perception_mode = LaunchConfiguration("perception_mode")
+
+    # Conditions: camera vs GT
+    is_camera = PythonExpression(["'", perception_mode, "' == 'camera'"])
+    is_gt     = PythonExpression(["'", perception_mode, "' != 'camera'"])
 
     pkg_share = get_package_share_directory("ros_humans_ros2")
     default_world = os.path.join(pkg_share, "worlds", "large_messy_room.world")
@@ -67,6 +76,12 @@ def generate_launch_description():
         DeclareLaunchArgument("default_goal_x", default_value="5.0"),
         DeclareLaunchArgument("default_goal_y", default_value="5.0"),
         DeclareLaunchArgument("map_yaml", default_value=_DEFAULT_MAP_YAML),
+        DeclareLaunchArgument(
+            "perception_mode",
+            default_value="gt",
+            description="Perception mode: 'gt' = ground-truth injection via move_humans, "
+                        "'camera' = HSV+Kalman detection via human_detector_red"),
+
 
         # ═══════════════════════════════════════════════════════════════
         #  SIMULATION  (unchanged from previous architecture)
@@ -155,11 +170,49 @@ def generate_launch_description():
                  "/world/large_messy_room/set_pose"
                  "@ros_gz_interfaces/srv/SetEntityPose"]),
 
+        # ── move_humans: GT mode — teleports humans AND publishes /detected_humans ──
         Node(package="ros_humans_ros2", executable="move_humans",
              name="move_humans", output="screen",
              parameters=[{"rate": 10.0,
                            "world": "large_messy_room",
-                           "use_sim_time": True}]),
+                           "publish_detections": True,
+                           "use_sim_time": True}],
+             condition=IfCondition(is_gt)),
+
+        # ── move_humans: camera mode — teleports humans only, no GT publishing ──
+        Node(package="ros_humans_ros2", executable="move_humans",
+             name="move_humans", output="screen",
+             parameters=[{"rate": 10.0,
+                           "world": "large_messy_room",
+                           "publish_detections": False,
+                           "use_sim_time": True}],
+             condition=IfCondition(is_camera)),
+
+        # ── human_detector_red: camera mode only ─────────────────────
+        # HSV red-blob detection + Kalman tracker (Hungarian assignment)
+        # Reads 4 bridged camera feeds → publishes /detected_humans
+        Node(package="ros_humans_ros2", executable="human_detector_red",
+             name="human_detector_red", output="screen",
+             parameters=[{"detection_rate": 5.0,
+                           "min_contour_area": 40,
+                           "max_detect_range": 12.0,
+                           "track_timeout": 1.5,
+                           "publish_timeout": 0.6,
+                           "red_h_low1": 0,
+                           "red_h_high1": 15,
+                           "red_h_low2": 165,
+                           "red_h_high2": 180,
+                           "red_s_min": 50,
+                           "red_v_min": 50,
+                           "cam_focal_px": 320.0,
+                           "reference_size": 0.5,
+                           "reference_height": 0.5,
+                           "cam_hfov_deg": 90.0,
+                           "use_lidar_fusion": True,
+                           "lidar_bearing_tolerance": 0.15,
+                           "show_debug_window": True,
+                           "use_sim_time": True}],
+             condition=IfCondition(is_camera)),
 
         # ═══════════════════════════════════════════════════════════════
         #  NEW ARCHITECTURE NODES
@@ -176,24 +229,10 @@ def generate_launch_description():
                            "max_yaw_rate": 2.5,
                            "use_sim_time": True}]),
 
-        # ── 2. Human detector (RED shapes only) ──────────────────────
-        Node(package="ros_humans_ros2", executable="human_detector_red",
-             name="human_detector_red", output="screen",
-             parameters=[{"detection_rate": 5.0,
-                           "min_contour_area": 40,
-                           "max_detect_range": 8.0,
-                           "track_timeout": 3.0,
-                           "red_h_low1": 0,
-                           "red_h_high1": 10,
-                           "red_h_low2": 170,
-                           "red_h_high2": 180,
-                           "red_s_min": 50,
-                           "red_v_min": 80,
-                           "cam_focal_px": 320.0,
-                           "reference_size": 0.5,
-                           "cam_hfov_deg": 90.0,
-                           "show_debug_window": True,
-                           "use_sim_time": True}]),
+        # ── 2. Human detection ────────────────────────────────────────────
+        #      GT mode:     move_humans publishes /detected_humans directly
+        #      Camera mode: human_detector_red (HSV + Kalman) reads cameras
+        #      Both modes:  move_humans teleports humans in Gazebo
 
         # ── 3. Global planner (A* on weighted grid) ──────────────────
         Node(package="ros_humans_ros2", executable="global_planner",
@@ -208,21 +247,17 @@ def generate_launch_description():
                            "room_max_x": 13.0,
                            "room_min_y": -13.0,
                            "room_max_y": 13.0,
+                           "proactive_replan_radius": 0.75,
+                           "proactive_zone_radius": 0.80,
+                           "proactive_weight": 20.0,
+                           "proactive_cooldown": 5.0,
                            "use_sim_time": True}]),
 
-        # ── 4. Local planner (path following + WAIT / REROUTE) ────────
-        Node(package="ros_humans_ros2", executable="local_planner",
-             name="local_planner", output="screen",
-             parameters=[{"linear_speed": 0.3,
-                           "angular_speed": 0.5,
-                           "waypoint_tolerance": 0.3,
-                           "human_threat_dist": 3.0,
-                           "human_zone_radius": 1.5,
-                           "weight_multiplier": 10.0,
-                           "max_wait_time": 8.0,
-                           "crossing_clear_time": 5.0,
-                           "predict_horizon": 3.0,
-                           "emergency_stop_dist": 0.4,
+        # ── 4. Social-nav planner (case-based VO + directional routing) ──
+        Node(package="ros_humans_ros2", executable="social_nav_planner",
+             name="social_nav_planner", output="screen",
+             parameters=[{"max_speed": 0.30,
+                           "angular_speed": 0.30,
                            "use_sim_time": True}]),
 
         # ── 5. Live visualization (GT + perception maps + social circles) ──

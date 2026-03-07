@@ -39,7 +39,7 @@ with walking humans.  Three software layers cooperate:
 | **Localisation** | Correct differential-drive odometry with LiDAR scan-matching    |
 | **Planning**     | Global A\* path, local path following, social behaviour rules   |
 
-The planner classifies every detected human into one of **four social
+The planner classifies every detected human into one of **five social
 navigation cases** and adjusts robot speed, heading, or route
 accordingly — never entering a human's personal zone (0.8 m) and
 reducing speed inside the social zone (1.5 m).
@@ -58,9 +58,9 @@ reducing speed inside the social zone (1.5 m).
                         │                 │   humans        │
                 ┌───────▼─────────────────▼─────────────────▼────────────┐
                 │                   Planning Layer                       │
-                │  global_planner (A*)  ─►  social_nav_planner / local  │
+                │  global_planner (A*)  ─►  social_nav_planner         │
                 │                                                        │
-                │  Case 1  ·  Case 2  ·  Case 3  ·  Case 4a  ·  Case 4b│
+                │  Case 1  ·  Case 2  ·  Case 3  ·  Case 4a  ·  Case 5 │
                 └───────────────────────────┬────────────────────────────┘
                                             │ /cmd_vel
                                     ┌───────▼───────┐
@@ -81,13 +81,14 @@ reducing speed inside the social zone (1.5 m).
 | `/camera/*/image`      | `Image`           | Gazebo → human_detector_red / human_detector_cv      |
 | `/robot_pose`          | `PoseStamped`     | localization_node → global_planner, social_nav_planner |
 | `/map`                 | `OccupancyGrid`   | map_publisher → global_planner, localization_node    |
-| `/detected_humans`     | `PoseArray`       | human_detector_red → social_nav_planner              |
-| `/human_velocities`    | `PoseArray`       | human_detector_red → social_nav_planner              |
-| `/global_path`         | `Path`            | global_planner → social_nav_planner / local_planner  |
+| `/detected_humans`     | `PoseArray`       | human_detector_red **or move_humans** → social_nav_planner |
+| `/human_velocities`    | `PoseArray`       | human_detector_red **or move_humans** → social_nav_planner |
+| `/global_path`         | `Path`            | global_planner → social_nav_planner                  |
 | `/cmd_vel`             | `Twist`           | social_nav_planner → Gazebo                          |
 | `/weight_zones`        | `PoseArray`       | social_nav_planner → global_planner                  |
 | `/replan_request`      | `PoseStamped`     | social_nav_planner → global_planner                  |
 | `/social_nav_markers`  | `MarkerArray`     | social_nav_planner → RViz                            |
+| `/human_ground_truth`  | `PoseArray`       | move_humans → live_visualization_node                |
 
 ### 2.2 Coordinate Frames
 
@@ -213,14 +214,14 @@ irpp_proj_git/
     │   └── live_visualization_node.py ← Side-by-side GT vs perception grids
     │
     ├── launch/                        ← Launch files
-    │   ├── social_nav_cases.launch.py ← Social nav test cases (main test launcher)
+    │   ├── social_nav_cases.launch.py ← Social nav test cases (case1–case5)
     │   ├── astar_navigation.launch.py ← Full A* navigation demo
-    │   ├── navigation.launch.py       ← Local-planner navigation
+    │   ├── navigation.launch.py       ← **Large-world social nav** (large_messy_room)
+    │   ├── test_scenario.launch.py    ← Corridor/doorway/open_room/L-corridor (social nav)
     │   ├── demo.launch.py             ← Gazebo + basic bridges
     │   ├── messy_road.launch.py       ← Messy road scenario
     │   ├── iiit_messy_road.launch.py  ← IIIT Hyderabad campus scenario
-    │   ├── world_to_map.launch.py     ← Offline map generation
-    │   └── test_scenario.launch.py    ← Alternate test scenario launcher
+    │   └── world_to_map.launch.py     ← Offline map generation
     │
     ├── worlds/                        ← Gazebo SDF world files
     │   ├── test_case_arena.world      ← 13×9 m rectangular arena (test cases)
@@ -311,6 +312,30 @@ positives but computationally heavier.
 
 Horizontally stitches the four directional camera feeds into a single
 panoramic image published on `/camera_360/image` for debugging.
+
+### 5.4 Large-World Mode: Ground-Truth Injection (`move_humans.py`)
+
+In `navigation.launch.py` (large_messy_room world), **`human_detector_red`
+is not launched**.  Instead, `move_humans` directly publishes:
+
+| Topic                 | Content                                              |
+|-----------------------|------------------------------------------------------|
+| `/detected_humans`    | GT positions `(x, y)` of every human each tick      |
+| `/human_velocities`   | GT velocity `(vx, vy)` from waypoint direction × speed |
+| `/human_ground_truth` | Same positions, for `live_visualization_node`        |
+
+This bypasses all camera processing and Kalman filtering, giving
+`social_nav_planner` perfect, noise-free human state.  The five humans
+are positioned along the robot path `(0,−8) → (5,5)` to exercise
+every social case:
+
+| Human           | Case exercised      | Behaviour                                 |
+|-----------------|---------------------|-------------------------------------------|
+| human_moving_1  | Case 1 — static     | Creeps at (1,−2), speed 0.03 m/s          |
+| human_moving_2  | Case 2 — head-on    | Patrols (1.5, 6) ↔ (1.5, −5) southward   |
+| human_moving_3  | Case 3 — crossing   | Patrols (−7, 1) ↔ (7, 1) east-west       |
+| human_moving_4  | Case 4a — ahead     | Patrols NE at 0.22 m/s (slower than robot)|
+| human_moving_5  | Case 5 — behind     | Starts at (0.5, −12), overtakes at 0.58 m/s |
 
 ---
 
@@ -414,8 +439,10 @@ A reactive path-follower that:
 3. Publishes `WAIT` or `REROUTE` decisions
 4. Sends `/cmd_vel` and `/weight_zones` / `/replan_request`
 
-Used in `navigation.launch.py`.  For test cases, replaced by the
-**Social Navigation Planner**.
+> **Note:** `local_planner` is used only in legacy demos
+> (`astar_navigation.launch.py`).  All current launch files —
+> `navigation.launch.py` (large world), `test_scenario.launch.py`, and
+> `social_nav_cases.launch.py` — use the **Social Navigation Planner**.
 
 ### 7.5 A\* Path Planner (`astar_path_planner.py`)
 
@@ -428,16 +455,26 @@ Used in `astar_navigation.launch.py`.
 ### 7.6 Social Navigation Planner (`social_nav_planner.py`)
 
 The **core node** for socially-aware behaviour.  Subscribes to
-ground-truth human positions and velocities, classifies each human
-into one of four cases, and computes the appropriate speed and
-steering command.
+human positions and velocities (GT or Kalman-tracked), classifies each
+human into one of **five** cases, and computes the appropriate speed
+and steering command.
 
-See [Section 8](#8-social-navigation--the-four-cases) for detailed
+**Key features beyond basic case classification:**
+
+| Feature                   | Description                                              |
+|---------------------------|----------------------------------------------------------|
+| Collision-cone speed      | VO cone width + TTC + human speed → 3-factor speed cap   |
+| 3-way `pass_side` routing | Weight zones placed behind / front / default of human    |
+| Social-exit hysteresis    | Exits social tracking only when dist > `SOCIAL_EXIT=1.80 m` |
+| Parallel turn + move      | Rotates and translates simultaneously (15–100% fwd)      |
+| Proactive replan          | Reroutes if human within 0.75 m of next path waypoint    |
+
+See [Section 8](#8-social-navigation--the-five-cases) for detailed
 case descriptions.
 
 ---
 
-## 8. Social Navigation — The Four Cases
+## 8. Social Navigation — The Five Cases
 
 The social planner maintains three spatial zones around every human:
 
@@ -471,9 +508,10 @@ Classification priority:
 ```
   ┌─ human speed < 0.05 m/s ──────► Case 1 (static)
   │
-  ├─ same_dir > 0.70 ─────────────► Case 4 (same direction)
-  │   ├─ ahead_d > 0 ─────────────►   4a (ahead)
-  │   └─ ahead_d ≤ 0 ─────────────►   4b (behind)
+  ├─ same_dir > 0.70 ─────────────► Case 4 / Case 5 (same direction)
+  │   ├─ ahead_d > 0 ─────────────►   Case 4a (ahead)
+  │   ├─ ahead_d ≤ 0, Δv ≤ 0.15 ──►   Case 4b (behind, same speed)
+  │   └─ ahead_d ≤ 0, Δv > 0.15 ──►   Case 5  (behind, MUCH faster)
   │
   ├─ approach > 0.15 m/s
   │   AND along_rh < −0.15 ───────► Case 2 (head-on)
@@ -483,16 +521,17 @@ Classification priority:
 
 ### Priority Table
 
-| Priority | Case            | Behaviour                       |
-|----------|-----------------|---------------------------------|
-| 0        | EMERGENCY       | LiDAR obstacle < 0.35 m → STOP |
-| 1        | Case 1          | Static blocker → reroute        |
-| 2        | Case 2          | Head-on → slow / stop           |
-| 3        | Case 3 conflict | Crossing → SLOW to pass behind  |
-| 3        | Case 4b         | Give way to faster human behind |
-| 4        | Case 4a         | Follow ahead human (no overtake)|
-| 5        | Case 3 safe     | Crossing — computed safe timing |
-| 9        | NONE            | No threat — full speed          |
+| Priority | Case            | Behaviour                                     |
+|----------|-----------------|-----------------------------------------------|
+| 0        | EMERGENCY       | LiDAR obstacle < 0.35 m → STOP              |
+| 1        | Case 1          | Static blocker → reroute                      |
+| 2        | Case 2          | Head-on → slow proportional to approach rate  |
+| 2        | Case 5          | Fast human from behind → slow + lateral yield |
+| 3        | Case 3 conflict | Crossing → SLOW to pass behind               |
+| 3        | Case 4b         | Give way to slightly faster human behind      |
+| 4        | Case 4a         | Follow ahead human (no overtake)              |
+| 5        | Case 3 safe     | Crossing — computed safe timing              |
+| 9        | NONE            | No threat — full speed                       |
 
 ---
 
@@ -650,19 +689,91 @@ faster, approaching from behind.
 
 ---
 
-## 9. Test Framework
+### Case 5 — Fast Human Approaching from Behind
+
+**Scenario:** A human moves in roughly the same direction as the robot,
+is behind it, and travels significantly faster (`Δv > 0.15 m/s` over
+robot speed).  Separated from Case 4b because the speed differential
+requires active yielding rather than a gentle give-way nudge.
+
+**Classification:** `same_dir > 0.70` AND `ahead_d ≤ 0` AND `rel_spd > 0.15`
+
+**Behaviour:**
+- **> 2× social zone** (> 3.0 m behind): full speed (monitor)
+- **1×–2× social zone** (1.5–3.0 m behind): 50% × velocity scale
+- **Inside social zone** (0.8–1.5 m behind): 30% + lateral nudge (0.30 rad/s)
+- **Inside personal zone** (< 0.8 m): crawl + maximum lateral nudge
+
+Velocity scale: $v_{\text{scale}} = \max(0.20,\ 1 - 0.80 \cdot \min(1, v_h))$
+
+Once the human overtakes and moves ahead it reclassifies as Case 4a.
+
+```
+    Human (0.58 m/s) ──────────►
+                  ↑ closes gap
+    Robot (0.30 m/s) ──────────► Goal
+    Robot slows + drifts laterally to let human pass cleanly
+```
+
+---
+
+### Collision-Cone Speed Modulation (Applied to All Cases)
+
+A final speed cap is applied on top of every case handler:
+
+**Outside cone (no collision predicted):**
+- Half-angle > 45° → speed × 0.70 (wide near-miss)
+- Half-angle > 30° → speed × 0.88 (close)
+- Otherwise → unchanged
+
+**Inside cone (collision predicted):** minimum of three factors:
+
+| Factor      | Formula                                              |
+|-------------|------------------------------------------------------|
+| Cone width  | $1 - \text{half\_angle}/(\pi/2)$                     |
+| TTC         | $\min(1,\ (t_{\text{enter}} - 0.5) / 5.0)$           |
+| Human speed | $\max(0.20,\ 1 - 0.80 \cdot \min(1, v_h))$          |
+
+RViz cone: **red** = inside, **yellow** = adjacent, **green** = clear.
+
+### 3-Way Pass-Side Routing
+
+| Condition                             | Side      | Weight zone placed               |
+|---------------------------------------|-----------|----------------------------------|
+| Robot behind human (lateral geometry) | `behind`  | Behind human, along its velocity |
+| Robot ahead of human                  | `front`   | Ahead of human                   |
+| Ambiguous                             | `default` | Left of human trajectory         |
+
+### Social-Circle Exit Hysteresis
+
+Exits social tracking only once distance exceeds
+`SOCIAL_EXIT = SOCIAL_RAD + 0.30 = 1.80 m`, preventing oscillation
+at the 1.50 m boundary.  Replanning is triggered on both **entry**
+and **confirmed exit**.
+
+### Parallel Rotation + Movement
+
+| Heading error   | Forward fraction |
+|-----------------|------------------|
+| > 1.2 rad (69°) | 15%              |
+| 0.5–1.2 rad     | 35%              |
+| 0.12–0.5 rad    | 55%              |
+| < 0.12 rad      | 100%             |
 
 ### 9.1 Components
 
 The test framework bypasses perception entirely and uses ground-truth
 data:
 
-| Component                  | Purpose                                             |
-|----------------------------|-----------------------------------------------------|
-| `human_case_controller.py` | Teleports one human in Gazebo + publishes GT poses  |
-| `social_nav_cases.launch.py` | Launches Gazebo + bridges + planning + GT controller |
-| `run_test_case.sh`         | One-command runner: build + launch + RViz            |
-| `test_case_arena.world`    | 13×9 m rectangular Gazebo world                     |
+| Component                    | Purpose                                                |
+|------------------------------|--------------------------------------------------------|
+| `human_case_controller.py`   | Teleports one human in Gazebo + publishes GT poses     |
+| `social_nav_cases.launch.py` | Gazebo + bridges + planning + GT controller (case1–5)  |
+| `test_scenario.launch.py`    | Corridor/doorway/open_room/L-corridor (social_nav_planner) |
+| `navigation.launch.py`       | Large world: 5 GT humans covering all 5 cases          |
+| `run_test_case.sh`           | One-command runner: build + launch + RViz              |
+| `run_test_scenario.sh`       | One-command runner for scenario tests                  |
+| `test_case_arena.world`      | 13×9 m rectangular Gazebo world                        |
 
 ### 9.2 Test Scenarios
 
@@ -673,6 +784,7 @@ data:
 | case3   | (0.0, 4.0)    | (0.0, −0.30)      | (−4.0, 0.0)  | (4.5, 0.0) |
 | case4a  | (−1.0, 0.0)   | (0.20, 0.0)       | (−4.0, 0.0)  | (4.5, 0.0) |
 | case4b  | (−5.0, 0.0)   | (0.40, 0.0)       | (−4.0, 0.0)  | (4.5, 0.0) |
+| case5   | (−5.5, 0.0)   | (0.58, 0.0)       | (−4.0, 0.0)  | (4.5, 0.0) |
 
 ### 9.3 Case 3 Collision Geometry
 
@@ -771,8 +883,19 @@ source install/setup.bash
 ./run_test_case.sh case2    # head-on approach → slow/stop
 ./run_test_case.sh case3    # crossing path → slow, pass behind
 ./run_test_case.sh case4a   # follow ahead human
-./run_test_case.sh case4b   # give way to faster human behind
+./run_test_case.sh case4b   # give way to slightly faster human behind
+./run_test_case.sh case5    # fast human from behind → yield + lateral nudge
 ```
+
+### 11.6 Run Large-World Social Nav Demo
+
+```bash
+./run_navigation.sh
+```
+
+Launches `navigation.launch.py` — `large_messy_room` world, robot
+spawns at `(0, −8)` heading north, goal `(5, 5)`.  Five ground-truth
+humans are pre-positioned along the route to trigger every social case.
 
 ---
 
@@ -783,9 +906,9 @@ source install/setup.bash
 | `run_test_case.sh`           | Build + launch social nav test case + RViz               |
 | `run_astar_navigation.sh`    | Full A\* navigation with perception + human detection    |
 | `run_astar_with_mapping.sh`  | A\* navigation with live LiDAR mapping                   |
-| `run_navigation.sh`          | Local-planner-based navigation                           |
+| `run_navigation.sh`          | **Large-world social nav** (`large_messy_room`, 5 GT humans) |
 | `run_simulation.sh`          | Gazebo simulation only (no planning/perception)          |
-| `run_test_scenario.sh`       | Alternate test scenario runner                           |
+| `run_test_scenario.sh`       | Corridor/doorway/open_room/L-corridor social nav tests   |
 | `convert_world_to_map.sh`    | Generate PGM + YAML map from a Gazebo .world file        |
 | `setup_dependencies.sh`      | Install all apt and pip dependencies                     |
 
@@ -853,9 +976,9 @@ Maps are saved to `~/ros2_maps/<world_name>.yaml` + `.pgm`.
 | `global_planner`          | global_planner         | A\* global path planning with weight zones     |
 | `local_planner`           | local_planner          | Reactive path following + WAIT/REROUTE         |
 | `astar_path_planner`      | astar_path_planner     | Standalone A\* with human-inflated costmap     |
-| `social_nav_planner`      | social_nav_planner     | 4-case social behaviour + RViz markers         |
+| `social_nav_planner`      | social_nav_planner     | **5-case** social behaviour + cone speed + RViz markers |
 | `human_case_controller`   | human_case_controller  | Ground-truth human injector (test cases)       |
-| `move_humans`             | move_humans            | Waypoint-based human animation (demo)          |
+| `move_humans`             | move_humans            | Waypoint human animation + GT `/detected_humans` + `/human_velocities` |
 | `publish_human_pose`      | publish_human_pose     | TF → PoseArray for human models                |
 | `world_to_map`            | world_to_map           | Offline SDF → OccupancyGrid conversion         |
 | `live_visualization_node` | live_visualization_node| GT vs perception comparison grids              |
@@ -875,13 +998,14 @@ Maps are saved to `~/ros2_maps/<world_name>.yaml` + `.pgm`.
 | `COLL_RAD`     | 0.50      | m      | Physical collision radius (robot + human + margin) |
 | `PERSONAL_RAD` | 0.80      | m      | Personal zone — robot must NEVER enter          |
 | `SOCIAL_RAD`   | 1.50      | m      | Social zone — robot slows proportionally         |
+| `SOCIAL_EXIT`  | 1.80      | m      | Exit hysteresis threshold (`SOCIAL_RAD + 0.30`) |
 | `SAME_DIR_THR` | 0.70      | cos    | Heading similarity for "same direction" (~45°)   |
 | `APPROACH_THR` | 0.15      | m/s    | Approach rate threshold for Case 2               |
 | `CROSS_BUF`    | 2.50      | s      | Safety buffer after human clears crossing        |
 | `MIN_SPD`      | 0.02      | m/s    | Minimum forward speed                            |
 | `DEF_MAX_SPD`  | 0.30      | m/s    | Default robot maximum speed                      |
 | `DEF_ANG_SPD`  | 0.30      | rad/s  | Default angular speed                            |
-| `GIVE_WAY_DIST`| 1.50      | m      | Trigger distance for Case 4b                     |
+| `GIVE_WAY_DIST`| 1.50      | m      | Trigger distance for Case 4b / Case 5           |
 | `OVERTAKE_WARN`| 2.00      | m      | No-overtake zone for Case 4a                     |
 | `WP_TOL`       | 0.30      | m      | Waypoint reached tolerance                       |
 | `EMERG_DIST`   | 0.35      | m      | LiDAR emergency stop distance                    |
@@ -909,6 +1033,18 @@ Maps are saved to `~/ros2_maps/<world_name>.yaml` + `.pgm`.
 | `proactive_replan_radius`  | 0.0 m  | Disabled — planner doesn't auto-reroute |
 | `proactive_zone_radius`    | 0.80 m | Weight zone radius for Case 1         |
 | `proactive_weight`         | 20.0   | Cost multiplier for human zones       |
+
+### 15.4 Global Planner Parameters (Large World — `navigation.launch.py`)
+
+| Parameter                 | Value   | Description                                      |
+|---------------------------|---------|--------------------------------------------------|
+| `planner_resolution`      | 0.2 m   | A\* grid cell size                               |
+| `inflation_radius`        | 0.35 m  | Obstacle inflation                               |
+| `room_min/max_x/y`        | ±13.0 m | A\* grid extents for `large_messy_room`           |
+| `proactive_replan_radius` | 0.75 m  | Reroute if human within 0.75 m of next waypoint  |
+| `proactive_zone_radius`   | 0.80 m  | Weight zone radius placed around human           |
+| `proactive_weight`        | 20.0    | Cost multiplier                                  |
+| `proactive_cooldown`      | 5.0 s   | Min time between proactive replans               |
 
 ---
 

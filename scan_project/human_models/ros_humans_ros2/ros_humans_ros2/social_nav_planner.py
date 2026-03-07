@@ -113,9 +113,13 @@ class SocialNavPlanner(Node):
         self.target_speed  = self.max_speed
         self.give_lat      = 0.0   # lateral nudge for case4b
 
-        # Case1 replan throttle
+        # Replan throttle
         self.last_replan_t = 0.0
-        self.replan_cd     = 8.0   # seconds between case1 replans
+        self.replan_cd     = 3.0   # seconds between replans
+
+        # Track which humans are inside the social circle (by index)
+        # for detecting EXIT transitions
+        self._in_social: set[int] = set()
 
         # ── Publishers ─────────────────────────────────────────────────
         self.cmd_pub    = self.create_publisher(Twist,       "/cmd_vel",             10)
@@ -190,6 +194,10 @@ class SocialNavPlanner(Node):
 
         # Classify each human → pick action
         cases = self._classify_all()
+
+        # ── Social circle replan: if path enters any human's social zone, replan ──
+        self._check_social_circle_replan(cases)
+
         self.target_speed, self.give_lat, self.active_case, self.active_action = \
             self._decide(cases)
 
@@ -237,6 +245,10 @@ class SocialNavPlanner(Node):
         if h_spd < STATIC_THR:
             return {**base, "case": "case1", "hvx": 0.0, "hvy": 0.0, "h_spd": 0.0}
 
+        # ── Collision cone — computed for ALL moving humans ───────────
+        cone = self._collision_cone(hx, hy, hvx, hvy)
+        base["cone"] = cone
+
         to_hum  = (rel_x / dist, rel_y / dist)
         h_dir   = (hvx / h_spd, hvy / h_spd)
         r_dir   = (math.cos(self.robot_yaw), math.sin(self.robot_yaw))
@@ -244,11 +256,16 @@ class SocialNavPlanner(Node):
         ahead_d  = rel_x * r_dir[0] + rel_y * r_dir[1]         # >0 = human in front
         approach = -(hvx * to_hum[0] + hvy * to_hum[1])        # >0 = approaching
 
-        # ── Case 4: same direction ────────────────────────────────────
+        # ── Case 4 / Case 5: same direction ─────────────────────────
         if same_dir > SAME_DIR_THR:
             sub = "front" if ahead_d > 0 else "behind"
             # Relative speed of human along robot heading (>0 = human faster)
             rel_spd = (hvx * r_dir[0] + hvy * r_dir[1]) - self.max_speed
+
+            # Case 5: human behind AND much faster → needs replan
+            if not (ahead_d > 0) and rel_spd > 0.15:
+                return {**base, "case": "case5", "rel_spd": rel_spd}
+
             return {**base, "case": "case4", "sub": sub,
                     "ahead": ahead_d > 0, "rel_spd": rel_spd}
 
@@ -260,9 +277,8 @@ class SocialNavPlanner(Node):
             return {**base, "case": "case2", "approach_rate": approach}
 
         # ── Case 3: crossing (default for moving, non-aligned human) ──
-        cone   = self._collision_cone(hx, hy, hvx, hvy)
         timing = self._crossing_timing(hx, hy, hvx, hvy)
-        return {**base, "case": "case3", "cone": cone, "timing": timing}
+        return {**base, "case": "case3", "timing": timing}
 
     # ── Action decision ─────────────────────────────────────────────────
 
@@ -272,11 +288,16 @@ class SocialNavPlanner(Node):
             return self.max_speed, 0.0, "NONE", "No human detected — full speed"
 
         # ── Real-time personal zone guard (highest priority) ──────────────
-        # Regardless of case logic, never let any human get closer than PERSONAL_RAD.
+        # Crossing humans (case3) are transiting — only stop at COLL_RAD
+        # to avoid physical contact.  All others stop at PERSONAL_RAD.
         for cd in cases:
-            if cd["dist"] < PERSONAL_RAD:
-                return MIN_SPD, 0.0, cd["case"], \
-                    f"PERSONAL ZONE ({cd['dist']:.2f}m) — STOP"
+            case_type = cd.get("case", "")
+            hard_stop = COLL_RAD if case_type == "case3" else PERSONAL_RAD
+            if cd["dist"] < hard_stop:
+                return MIN_SPD, 0.0, case_type, \
+                    f"PERS-ZONE ({cd['dist']:.2f}m) — CRAWL"
+            # Case3 in PERSONAL_RAD..COLL_RAD range: let case3 handler
+            # decide speed based on crossing timing (don't pre-empt it)
 
         # ── Social zone proximity scaling (safety net) ──────────────────
         # When a human is inside SOCIAL_RAD, cap the maximum speed the
@@ -289,7 +310,7 @@ class SocialNavPlanner(Node):
         else:
             self._proximity_max = self.max_speed
         # Priority order (lower number = higher priority)
-        PRIO = {"EMERGENCY": 0, "case1": 1, "case2": 2,
+        PRIO = {"EMERGENCY": 0, "case1": 1, "case2": 2, "case5": 2,
                 "case3_conflict": 3, "case4b": 3, "case4a": 4,
                 "case3_safe": 5, "NONE": 9}
 
@@ -316,6 +337,10 @@ class SocialNavPlanner(Node):
                 p = PRIO["case3_conflict" if conflict else "case3_safe"]
                 c = "case3"
 
+            elif c == "case5":
+                spd, lat, act = self._act_case5(cd)
+                p = PRIO["case5"]
+
             elif c == "case4":
                 spd, lat, act = self._act_case4(cd)
                 sub = cd.get("sub", "front")
@@ -333,43 +358,108 @@ class SocialNavPlanner(Node):
         spd, lat, c, act = best
         if hasattr(self, '_proximity_max'):
             spd = min(spd, self._proximity_max)
+
+        # ── Collision-cone speed cap (applies to ALL cases) ────────
+        for cd in cases:
+            cs = self._cone_based_speed(cd)
+            if cs < spd:
+                spd = cs
+                # Avoid contradictory "clear [cone->X]" messages
+                act = act.replace("\u2014 clear", "\u2014 cone-lim")
+                act = act.replace("\u2014 safe", "\u2014 cone-lim")
+                act += f" [→{cs:.2f}m/s cone]"
+
         return (spd, lat, c, act)
 
     # ── Per-case action handlers ────────────────────────────────────────
 
     def _act_case1(self, cd) -> tuple[float, float, str]:
-        """Static blocker → publish weight zone + request reroute."""
-        self._pub_weight_zone(cd["hx"], cd["hy"], radius=1.2, weight=20.0)
-        now = time.time()
-        if now - self.last_replan_t > self.replan_cd:
-            self.last_replan_t = now
-            self._send_replan()
-        return 0.0, 0.0, "1: Static blocker — rerouting"
+        """Static blocker → publish weight zone; speed based on distance.
+        Replanning is handled centrally by _check_social_circle_replan
+        when the rover enters the social circle (blue ring)."""
+        hx, hy = cd["hx"], cd["hy"]
+        dist = cd["dist"]
+
+        # Always keep weight zone active so replanner has cost info
+        self._pub_weight_zone(hx, hy, radius=1.2, weight=20.0)
+
+        on_path = self._human_on_path(hx, hy, threshold=PERSONAL_RAD)
+
+        if on_path:
+            # Human IS blocking the current path — slow/crawl
+            if dist < PERSONAL_RAD:
+                return MIN_SPD, 0.0, f"1: Blocker ON PATH — crawl (d={dist:.1f}m)"
+            elif dist < SOCIAL_RAD:
+                factor = (dist - PERSONAL_RAD) / (SOCIAL_RAD - PERSONAL_RAD)
+                spd = max(MIN_SPD, self.max_speed * factor * 0.3)
+                return spd, 0.0, f"1: Static blocker — slow (d={dist:.1f}m)"
+            return self.max_speed * 0.3, 0.0, "1: Static blocker — approaching"
+        else:
+            # Human NOT on current path → reroute succeeded, proceed
+            if dist < PERSONAL_RAD:
+                return MIN_SPD, 0.0, f"1: Passing static — personal zone (d={dist:.1f}m)"
+            elif dist < SOCIAL_RAD:
+                factor = (dist - PERSONAL_RAD) / (SOCIAL_RAD - PERSONAL_RAD)
+                spd = max(MIN_SPD * 2, self.max_speed * max(0.4, factor))
+                return spd, 0.0, f"1: Passing static human — {spd:.2f}m/s"
+            return self.max_speed, 0.0, f"1: Static human clear (d={dist:.1f}m)"
 
     def _act_case2(self, cd) -> tuple[float, float, str]:
-        """Head-on approaching → slow / stop."""
+        """Head-on approaching → speed scaled by human velocity + cone + distance.
+        Replanning is handled centrally by _check_social_circle_replan
+        when the rover enters the social circle (blue ring)."""
         dist = cd["dist"]
-        rate = cd["approach_rate"]
-        # Combined approach speed = robot_speed + human approach_rate
-        combined = rate + self.max_speed
-        ttc = dist / max(combined, 0.1)
+        hx, hy = cd["hx"], cd["hy"]
+        hvx = cd.get("hvx", 0.0)
+        hvy = cd.get("hvy", 0.0)
+        h_spd = cd.get("h_spd", math.hypot(hvx, hvy))
+        approach = cd.get("approach_rate", h_spd)
+
+        # Always keep weight zones along human trajectory so replanner
+        # has cost info ready when _check_social_circle_replan fires
+        if dist < SOCIAL_RAD * 2.0:
+            side = self._pass_side(cd)
+            self._pub_weight_zone_with_trajectory(
+                hx, hy, hvx, hvy, radius=1.2, weight=20.0,
+                pass_side=side)
+
+        # Velocity-based scale: faster approaching human → slower rover
+        # approach=0 → 1.0, approach=0.6 → 0.40, approach>=1.0 → 0.25
+        vel_scale = max(0.25, 1.0 - min(1.0, approach / 0.8) * 0.75)
 
         if dist < PERSONAL_RAD:
-            return 0.0, 0.0, f"2: Head-on STOP (d={dist:.1f}m)"
+            return MIN_SPD, 0.0, f"2: Head-on STOP (d={dist:.1f}m)"
 
         if dist < SOCIAL_RAD:
             factor = (dist - PERSONAL_RAD) / (SOCIAL_RAD - PERSONAL_RAD)
-            spd = max(MIN_SPD, self.max_speed * factor * 0.5)
-            return spd, 0.0, f"2: Head-on SLOW {spd:.2f}m/s"
+            spd = max(MIN_SPD, self.max_speed * factor * 0.5 * vel_scale)
+            return spd, 0.0, \
+                f"2: Head-on SLOW {spd:.2f}m/s (hv={h_spd:.2f})"
 
-        spd = self.max_speed * 0.6
-        return spd, 0.0, f"2: Head-on approaching (d={dist:.1f}m)"
+        spd = self.max_speed * 0.6 * vel_scale
+        return spd, 0.0, \
+            f"2: Head-on approaching (d={dist:.1f}m hv={h_spd:.2f})"
 
     def _act_case3(self, cd) -> tuple[float, float, str]:
         """Crossing → compute collision cone; slow to pass BEHIND,
         while ALWAYS staying outside the human's personal zone."""
         cone   = cd.get("cone", {})
         timing = cd.get("timing", {})
+        hx, hy = cd["hx"], cd["hy"]
+        hvx_c, hvy_c = cd.get("hvx", 0.0), cd.get("hvy", 0.0)
+
+        # Publish weight zones — route behind if crossing toward rover
+        if cd["dist"] < SOCIAL_RAD * 2.0:
+            side = self._pass_side(cd)
+            self._pub_weight_zone_with_trajectory(
+                hx, hy, hvx_c, hvy_c, radius=1.2, weight=20.0,
+                pass_side=side)
+
+        # ── Human velocity factor for crossing speed ──────────────
+        h_spd_c = cd.get("h_spd", math.hypot(hvx_c, hvy_c))
+        # Faster crossing human → rover slows more aggressively
+        # h_spd=0 → 1.0, h_spd=0.3 → 0.70, h_spd=0.6 → 0.40, >=1.0 → 0.20
+        cross_vel_scale = max(0.20, 1.0 - 0.80 * min(1.0, h_spd_c / 1.0))
 
         # If no path crossing exists, fall back to raw cone check
         if not timing.get("exists", False):
@@ -379,8 +469,9 @@ class SocialNavPlanner(Node):
                     t_enter = cone.get("t_enter") or 0.0
                     d_entry = self.max_speed * t_enter
                     v_safe  = max(MIN_SPD, d_entry / (t_exit + CROSS_BUF))
-                    return v_safe, 0.0, \
-                        f"Crossing (cone) — SLOW {v_safe:.2f}m/s"
+                    v_safe  = v_safe * cross_vel_scale
+                    return max(MIN_SPD, v_safe), 0.0, \
+                        f"Crossing (cone) — SLOW {v_safe:.2f}m/s (hv={h_spd_c:.2f})"
             return self.max_speed, 0.0, "Crossing — clear"
 
         d_cross     = timing["dist_to_cross"]    # metres along robot path
@@ -396,6 +487,8 @@ class SocialNavPlanner(Node):
         # t_h_clears already uses PERSONAL_RAD (not COLL_RAD).
         v_safe = d_cross / max(t_h_clears + CROSS_BUF, 0.01)
         v_safe = max(MIN_SPD, min(self.max_speed, v_safe))
+        # Scale by human velocity: faster crosser -> slower rover
+        v_safe = max(MIN_SPD, v_safe * cross_vel_scale)
 
         if v_safe >= self.max_speed * 0.98:
             # Defense-in-depth: even when timing says "safe", verify
@@ -418,14 +511,15 @@ class SocialNavPlanner(Node):
                 t2 = (-b_q + sq) / (2.0 * a_q)
                 if t1 > 0.0 or t2 > 0.0:
                     # Robot will enter human's social zone — slow down
-                    v_cone = self.max_speed * 0.50
+                    v_cone = self.max_speed * 0.50 * cross_vel_scale
+                    v_cone = max(MIN_SPD, v_cone)
                     return v_cone, 0.0, \
-                        f"Crossing — social-cone SLOW {v_cone:.2f}m/s"
+                        f"Crossing — social-cone SLOW {v_cone:.2f}m/s (hv={h_spd_c:.2f})"
             return self.max_speed, 0.0, \
                 f"Crossing — safe (d={d_cross:.1f}m)"
 
         return v_safe, 0.0, \
-            f"Crossing — SLOW {v_safe:.2f}m/s (clears t={t_h_clears:.1f}s)"
+            f"Crossing — SLOW {v_safe:.2f}m/s (hv={h_spd_c:.2f} clears={t_h_clears:.1f}s)"
 
     def _act_case4(self, cd) -> tuple[float, float, str]:
         """Same direction → no-overtake (front) or give-way (behind)."""
@@ -452,6 +546,46 @@ class SocialNavPlanner(Node):
                 return self.max_speed * 0.70, 0.0, \
                     f"4b: Preparing give-way (d={dist:.1f}m)"
             return self.max_speed, 0.0, f"4b: Behind (d={dist:.1f}m)"
+
+    def _act_case5(self, cd) -> tuple[float, float, str]:
+        """Fast human from behind → speed scaled by human velocity + cone.
+        The centralised _check_social_circle_replan triggers the actual
+        replan when the rover enters the social circle."""
+        dist = cd["dist"]
+        rel_spd = cd.get("rel_spd", 0.0)
+        h_spd = cd.get("h_spd", 0.0)
+        hx, hy = cd["hx"], cd["hy"]
+        hvx = cd.get("hvx", 0.0)
+        hvy = cd.get("hvy", 0.0)
+
+        # Always publish weight zones along human trajectory so the
+        # replanner has cost data ready
+        if dist < SOCIAL_RAD * 2.5:
+            side = self._pass_side(cd)
+            self._pub_weight_zone_with_trajectory(
+                hx, hy, hvx, hvy, radius=1.2, weight=20.0,
+                pass_side=side)
+
+        # Velocity-based scale: faster human behind → rover slows more
+        # h_spd=0.3 → 0.76, h_spd=0.6 → 0.52, h_spd>=1.0 → 0.20
+        vel_scale = max(0.20, 1.0 - 0.80 * min(1.0, h_spd / 1.0))
+
+        if dist < PERSONAL_RAD:
+            return MIN_SPD, 0.30, \
+                f"5: FAST BEHIND — move aside (d={dist:.1f}m hv={h_spd:.2f})"
+
+        if dist < SOCIAL_RAD:
+            slow = self.max_speed * 0.30 * vel_scale
+            slow = max(MIN_SPD, slow)
+            return slow, 0.30, \
+                f"5: FAST BEHIND — slow+offset (d={dist:.1f}m hv={h_spd:.2f})"
+
+        if dist < SOCIAL_RAD * 2.0:
+            spd = self.max_speed * 0.50 * vel_scale
+            return max(MIN_SPD, spd), 0.0, \
+                f"5: Fast behind approaching (d={dist:.1f}m hv={h_spd:.2f})"
+
+        return self.max_speed, 0.0, f"5: Fast behind far (d={dist:.1f}m)"
 
     # ── Collision cone computation ──────────────────────────────────────
 
@@ -588,6 +722,58 @@ class SocialNavPlanner(Node):
             "t_human_clears":  t_clears,    # seconds — when human has cleared
         }
 
+    # ── Collision-cone speed modulation ─────────────────────────────────
+
+    def _cone_based_speed(self, cd) -> float:
+        """Speed cap from the velocity-obstacle collision cone.
+
+        When NOT in collision: mild geometry-only proximity slowdown.
+        When IN collision cone: three factors combine (most restrictive):
+          1. Cone width  (half_angle) — proximity
+          2. TTC         (t_enter)    — urgency
+          3. Human speed (h_spd)      — faster human = more cautious
+        The velocity factor only applies when on a collision course.
+        """
+        cone  = cd.get("cone")
+        h_spd = cd.get("h_spd", 0.0)
+
+        if not cone:
+            return self.max_speed   # static human — case handlers manage speed
+
+        half_angle = cone.get("half_angle", 0.0)
+        collision  = cone.get("collision", False)
+
+        if not collision:
+            # NOT on a collision course — geometry-only proximity slowdown
+            if half_angle > math.pi / 4.0:   # very close (< ~0.71 m)
+                return self.max_speed * 0.70
+            if half_angle > math.pi / 6.0:   # close (< ~1.00 m)
+                return self.max_speed * 0.88
+            return self.max_speed
+
+        # ON collision course — human velocity matters now
+        if h_spd > 0.05:
+            vel_factor = max(0.20, 1.0 - 0.80 * min(1.0, h_spd / 1.0))
+        else:
+            vel_factor = 1.0
+
+        t_enter = cone.get("t_enter")
+
+        # Cone-width factor: half_angle = pi/2 (touching) -> 0.10,  0 -> 1.00
+        angle_ratio = min(1.0, half_angle / (math.pi / 2.0))
+        cone_factor = max(0.10, 1.0 - 0.90 * angle_ratio)
+
+        # TTC factor: TTC = 0 -> 0.10,  TTC >= 5 s -> 1.00
+        if t_enter is not None and t_enter > 0.0:
+            ttc_factor = max(0.10, min(1.0, t_enter / 5.0))
+        elif t_enter is not None:
+            ttc_factor = 0.10
+        else:
+            ttc_factor = 0.80
+
+        combined = min(cone_factor, ttc_factor, vel_factor)
+        return max(MIN_SPD, self.max_speed * combined)
+
     # ── Path following ──────────────────────────────────────────────────
 
     def _follow_path(self, target_spd: float) -> Twist:
@@ -616,12 +802,15 @@ class SocialNavPlanner(Node):
         while ang >  math.pi: ang -= 2 * math.pi
         while ang < -math.pi: ang += 2 * math.pi
 
-        if abs(ang) > 0.5:          # large heading error → rotate first
+        if abs(ang) > 1.2:          # very large error (>~70°) → rotate + crawl
             cmd.angular.z = self.ang_speed if ang > 0 else -self.ang_speed
-            cmd.linear.x  = min(target_spd, MIN_SPD)
-        elif abs(ang) > 0.12:       # moderate heading error → creep + steer
+            cmd.linear.x  = max(MIN_SPD, target_spd * 0.15)
+        elif abs(ang) > 0.5:        # large error (~30-70°) → rotate + move
+            cmd.angular.z = self.ang_speed if ang > 0 else -self.ang_speed
+            cmd.linear.x  = max(MIN_SPD, target_spd * 0.35)
+        elif abs(ang) > 0.12:       # moderate error → steer + move
             cmd.angular.z = ang * 0.8
-            cmd.linear.x  = max(MIN_SPD, target_spd * 0.4)
+            cmd.linear.x  = max(MIN_SPD, target_spd * 0.55)
         else:                       # on course → full (social) speed
             cmd.linear.x  = min(target_spd, max(MIN_SPD,
                                  target_spd * min(1.0, dist / 0.6)))
@@ -666,7 +855,258 @@ class SocialNavPlanner(Node):
         req.pose.orientation.w = 1.0
         self.rp_pub.publish(req)
         self.get_logger().info(
-            f"Case1: replan from ({self.robot_x:.1f}, {self.robot_y:.1f})")
+            f"Replan from ({self.robot_x:.1f}, {self.robot_y:.1f})")
+
+    # ── Path / proximity helpers ────────────────────────────────────────
+
+    @staticmethod
+    def _pt_seg_dist(px, py, ax, ay, bx, by) -> float:
+        """Distance from point (px,py) to line segment (ax,ay)-(bx,by)."""
+        dx, dy = bx - ax, by - ay
+        len_sq = dx * dx + dy * dy
+        if len_sq < 1e-12:
+            return math.hypot(px - ax, py - ay)
+        t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / len_sq))
+        return math.hypot(px - (ax + t * dx), py - (ay + t * dy))
+
+    def _human_on_path(self, hx, hy, threshold=0.8) -> bool:
+        """True if (hx,hy) is within *threshold* of any upcoming path segment."""
+        if not self.path or self.path_idx >= len(self.path):
+            return False
+        for wi in range(self.path_idx, len(self.path)):
+            d = math.hypot(hx - self.path[wi][0], hy - self.path[wi][1])
+            if d < threshold:
+                return True
+            if wi + 1 < len(self.path):
+                sd = self._pt_seg_dist(
+                    hx, hy,
+                    self.path[wi][0], self.path[wi][1],
+                    self.path[wi + 1][0], self.path[wi + 1][1])
+                if sd < threshold:
+                    return True
+        return False
+
+    def _pass_side(self, cd) -> str:
+        """Determine which side of the human the rover should pass,
+        based on the perpendicular velocity component relative to the
+        rover's heading.
+
+        Returns
+        -------
+        "behind"  — perp velocity TOWARD rover path → route behind
+                     the human (where they came from, now clear).
+        "front"   — perp velocity AWAY from rover path → route in
+                     front of the human (the human is leaving).
+        "default" — no significant perpendicular component.
+        """
+        hvx = cd.get("hvx", 0.0)
+        hvy = cd.get("hvy", 0.0)
+        h_spd = cd.get("h_spd", math.hypot(hvx, hvy))
+        if h_spd < 0.08:
+            return "default"
+
+        r_dir = (math.cos(self.robot_yaw), math.sin(self.robot_yaw))
+
+        # Lateral offset of human from the rover's forward line
+        # positive = human is to the LEFT of the heading
+        rel_x = cd["hx"] - self.robot_x
+        rel_y = cd["hy"] - self.robot_y
+        lateral_offset = -r_dir[1] * rel_x + r_dir[0] * rel_y
+
+        # Perpendicular component of human velocity
+        # positive = human moving to the LEFT of the rover heading
+        perp_vel = -r_dir[1] * hvx + r_dir[0] * hvy
+
+        if abs(perp_vel) < 0.08:
+            return "default"
+
+        # "Toward" => perp_vel reduces |lateral_offset|
+        # i.e. sign(perp_vel) != sign(lateral_offset)
+        if (lateral_offset * perp_vel) < 0.0:
+            return "behind"   # human crossing toward rover -> go behind
+        else:
+            return "front"    # human moving away -> go in front
+
+    def _pub_weight_zone_with_trajectory(self, hx, hy, hvx, hvy,
+                                         radius=1.2, weight=20.0,
+                                         pass_side="default"):
+        """Publish weight zones along the human's trajectory.
+
+        pass_side controls which corridor the A* planner keeps clear:
+
+        "behind" — heavy zones along the human's FORWARD trajectory
+                    (blocks front).  Back corridor is clear so the
+                    rover routes BEHIND the human.
+
+        "front"  — heavy zones along the human's BACKWARD extrapolation
+                    (blocks back).  Front corridor is clear so the
+                    rover routes in FRONT of the human.
+
+        "default"— zones at the current position AND forward trajectory.
+        """
+        z = PoseArray()
+        z.header.frame_id = "map"
+        z.header.stamp = self.get_clock().now().to_msg()
+        h_spd = math.hypot(hvx, hvy)
+
+        if pass_side == "behind" and h_spd > 0.05:
+            # ---- Route BEHIND the human ----
+            # Zone at current position (thin)
+            p = Pose()
+            p.position.x = hx
+            p.position.y = hy
+            p.position.z = radius * 0.8
+            p.orientation.w = weight
+            z.poses.append(p)
+
+            # Heavy zones along FORWARD trajectory only
+            for step in range(1, 15):         # 0.5 s steps, 7 s ahead
+                dt = step * 0.5
+                px = hx + hvx * dt
+                py = hy + hvy * dt
+                decay = max(0.6, 1.0 - (dt / 8.0) * 0.4)
+                w = max(5.0, weight * 1.5 * decay)
+                fp = Pose()
+                fp.position.x = px
+                fp.position.y = py
+                fp.position.z = radius * 1.3
+                fp.orientation.w = w
+                z.poses.append(fp)
+            # NO zones behind -> that corridor is clear
+
+        elif pass_side == "front" and h_spd > 0.05:
+            # ---- Route in FRONT of the human ----
+            # Zone at current position (thin)
+            p = Pose()
+            p.position.x = hx
+            p.position.y = hy
+            p.position.z = radius * 0.8
+            p.orientation.w = weight
+            z.poses.append(p)
+
+            # Heavy zones along BACKWARD extrapolation (opposite velocity)
+            for step in range(1, 15):         # 0.5 s steps, 7 s back
+                dt = step * 0.5
+                px = hx - hvx * dt            # opposite to velocity
+                py = hy - hvy * dt
+                decay = max(0.6, 1.0 - (dt / 8.0) * 0.4)
+                w = max(5.0, weight * 1.5 * decay)
+                fp = Pose()
+                fp.position.x = px
+                fp.position.y = py
+                fp.position.z = radius * 1.3
+                fp.orientation.w = w
+                z.poses.append(fp)
+            # NO zones in front -> that corridor is clear
+
+        else:
+            # ---- Default: zones at current + forward ----
+            p = Pose()
+            p.position.x = hx
+            p.position.y = hy
+            p.position.z = radius
+            p.orientation.w = weight
+            z.poses.append(p)
+
+            if h_spd > 0.05:
+                for step in range(1, 11):
+                    dt = step * 0.5
+                    px = hx + hvx * dt
+                    py = hy + hvy * dt
+                    decay = 1.0 - (dt / 5.5) * 0.5
+                    w = max(2.0, weight * decay)
+                    fp = Pose()
+                    fp.position.x = px
+                    fp.position.y = py
+                    fp.position.z = radius
+                    fp.orientation.w = w
+                    z.poses.append(fp)
+
+        self.wt_pub.publish(z)
+
+    def _check_social_circle_replan(self, cases: list[dict]):
+        """Replan on ENTER, while inside, AND on EXIT of social circle.
+
+        Triggers:
+          1. Collision cone collision AND within 2x SOCIAL_RAD
+          2. Rover enters social circle (dist < SOCIAL_RAD)
+          3. Rover EXITS social circle (was inside, now outside)
+             -> replan to recover the optimal path after passing
+
+        Routing decision (perpendicular velocity of human):
+          perp TOWARD rover  -> pass BEHIND the human
+          perp AWAY from rover -> pass in FRONT of the human
+          no significant perp -> default weight zones
+        """
+        if not self.path or not cases:
+            return
+        now = time.time()
+        cooldown_ok = (now - self.last_replan_t >= self.replan_cd)
+
+        # Build current set of humans inside social circle with hysteresis:
+        # - Enter: dist < SOCIAL_RAD
+        # - Exit:  dist >= SOCIAL_RAD + 0.30 m  (prevents boundary oscillation)
+        SOCIAL_EXIT = SOCIAL_RAD + 0.30
+        currently_inside: set[int] = set()
+        for i, cd in enumerate(cases):
+            if i in self._in_social:
+                # Already tracked inside: keep until clearly outside
+                if cd["dist"] < SOCIAL_EXIT:
+                    currently_inside.add(i)
+            else:
+                # Not yet tracked: enter at normal SOCIAL_RAD threshold
+                if cd["dist"] < SOCIAL_RAD:
+                    currently_inside.add(i)
+
+        # Detect EXIT: was inside last tick, now outside
+        exited = self._in_social - currently_inside
+
+        # Update tracking state
+        self._in_social = currently_inside.copy()
+
+        # --- Trigger 3: EXIT from social circle -> recovery replan ---
+        if exited and cooldown_ok:
+            self.get_logger().info(
+                f"REPLAN [EXIT] rover left social circle of {len(exited)} human(s) "
+                f"-> recovery replan",
+                throttle_duration_sec=2.0)
+            self.last_replan_t = now
+            self._send_replan()
+            return  # one replan per tick
+
+        if not cooldown_ok:
+            return
+
+        # --- Trigger 1 & 2: ENTER / inside social circle ---
+        for cd in cases:
+            cone = cd.get("cone")
+            dist = cd["dist"]
+
+            # Trigger 1: collision cone says collision AND within range
+            cone_collision = (cone is not None
+                              and cone.get("collision", False)
+                              and dist < SOCIAL_RAD * 2.0)
+            # Trigger 2: rover inside social circle
+            inside_social = dist < SOCIAL_RAD
+
+            if cone_collision or inside_social:
+                hx, hy = cd["hx"], cd["hy"]
+                hvx = cd.get("hvx", 0.0)
+                hvy = cd.get("hvy", 0.0)
+
+                side = self._pass_side(cd)
+                trigger = "CONE" if cone_collision else "SOCIAL"
+                self.get_logger().info(
+                    f"REPLAN [{trigger}] pass={side}: "
+                    f"human ({hx:.1f},{hy:.1f}) d={dist:.2f}m",
+                    throttle_duration_sec=2.0)
+                self._pub_weight_zone_with_trajectory(
+                    hx, hy, hvx, hvy,
+                    radius=1.2, weight=20.0,
+                    pass_side=side)
+                self.last_replan_t = now
+                self._send_replan()
+                return  # one replan per tick
 
     # ══════════════════════════════════════════════════════════════════════
     #  RViz marker helpers
@@ -872,6 +1312,8 @@ class SocialNavPlanner(Node):
             return _col(0.9, 0.9, 0.0)
         if "4a" in c:                 return _col(0.2, 0.8, 1.0)
         if "4b" in c:                 return _col(0.4, 0.6, 1.0)
+        if "case5" in c:              return _col(0.8, 0.2, 1.0)  # purple
+        if "case6" in c:              return _col(1.0, 0.8, 0.2)  # gold
         return _col(0.5, 1.0, 0.5)
 
 

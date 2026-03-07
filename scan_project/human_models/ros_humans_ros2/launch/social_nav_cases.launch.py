@@ -165,11 +165,11 @@ def _launch_setup(context, *args, **kwargs):
                            "room_max_x":         room_max_x,
                            "room_min_y":         room_min_y,
                            "room_max_y":         room_max_y,
-                           # Tighter zone radii so the 14m arena stays navigable
-                           "proactive_replan_radius": 0.0,
+                           # Proactive monitoring: replan if human is near path
+                           "proactive_replan_radius": 0.75,
                            "proactive_zone_radius":   0.80,
                            "proactive_weight":       20.0,
-                           "proactive_cooldown":     9999.0,
+                           "proactive_cooldown":     5.0,
                            "use_sim_time": True}]),
 
         # Social nav planner — replaces local_planner for test cases
