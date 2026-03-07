@@ -58,7 +58,7 @@ from geometry_msgs.msg import Twist, PoseStamped, Pose, PoseArray, Point
 from nav_msgs.msg import Path
 from sensor_msgs.msg import LaserScan
 from visualization_msgs.msg import Marker, MarkerArray
-from std_msgs.msg import ColorRGBA
+from std_msgs.msg import Bool, ColorRGBA
 
 # ── Planning constants ────────────────────────────────────────────────────────
 STATIC_THR    = 0.05   # m/s  — human considered stationary (case 1)
@@ -126,6 +126,7 @@ class SocialNavPlanner(Node):
         self.wt_pub     = self.create_publisher(PoseArray,   "/weight_zones",        10)
         self.rp_pub     = self.create_publisher(PoseStamped, "/replan_request",      10)
         self.mk_pub     = self.create_publisher(MarkerArray, "/social_nav_markers",  10)
+        self.goal_pub   = self.create_publisher(Bool,        "/goal_reached",        10)
 
         # ── Subscribers ────────────────────────────────────────────────
         self.create_subscription(PoseArray,   "/detected_humans",  self._humans_cb, 10)
@@ -793,6 +794,9 @@ class SocialNavPlanner(Node):
             self.path_idx += 1
             if self.path_idx >= len(self.path):
                 self.get_logger().info("Goal reached!", throttle_duration_sec=5.0)
+                done = Bool()
+                done.data = True
+                self.goal_pub.publish(done)
                 return cmd
             tx, ty = self.path[self.path_idx]
             dx, dy = tx - self.robot_x, ty - self.robot_y
