@@ -2,7 +2,7 @@ import json
 import math
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Pose
+from geometry_msgs.msg import Pose, PoseArray, PoseStamped
 from ros_gz_interfaces.srv import SetEntityPose
 from ros_gz_interfaces.msg import Entity
 
@@ -96,6 +96,9 @@ class HumanMover(Node):
         while not self.client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info(f"Waiting for {service_name}...")
 
+        # Ground truth publisher — lets visualization node compare GT vs detected
+        self.gt_pub = self.create_publisher(PoseArray, '/human_ground_truth', 10)
+
         self.state = {}
         self._init_segments()
         self.timer = self.create_timer(1.0 / max(self.rate_hz, 0.1), self._tick)
@@ -157,20 +160,38 @@ class HumanMover(Node):
         req.entity = entity
         req.pose = pose
         self.client.call_async(req)
+        return (x, y)
 
     def _tick(self):
         now = float(self.get_clock().now().seconds_nanoseconds()[0])
+        gt_msg = PoseArray()
+        gt_msg.header.frame_id = 'map'
+        gt_msg.header.stamp = self.get_clock().now().to_msg()
         for human in self.humans:
-            self._update_human(human, now)
+            pos = self._update_human(human, now)
+            if pos is not None:
+                p = Pose()
+                p.position.x = pos[0]
+                p.position.y = pos[1]
+                p.position.z = 0.0
+                gt_msg.poses.append(p)
+        self.gt_pub.publish(gt_msg)
 
 
 def main():
     rclpy.init()
     node = HumanMover()
     node.get_logger().info("Human mover started (ROS2)")
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+    try:
+        rclpy.spin(node)
+    except (KeyboardInterrupt, rclpy.executors.ExternalShutdownException):
+        pass
+    finally:
+        node.destroy_node()
+        try:
+            rclpy.shutdown()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

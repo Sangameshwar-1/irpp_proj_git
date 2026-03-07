@@ -150,8 +150,8 @@ def generate_launch_description():
             name="rover_explorer",
             output="screen",
             parameters=[{
-                "linear_speed": 0.3,
-                "angular_speed": 0.5,
+                "linear_speed": 0.08,
+                "angular_speed": 0.12,
                 "obstacle_distance": 0.8,
                 "room_bounds": 10.0,
                 "use_sim_time": True

@@ -18,6 +18,8 @@ setup(
             "launch/astar_navigation.launch.py",
             "launch/navigation.launch.py",
             "launch/world_to_map.launch.py",
+            "launch/test_scenario.launch.py",
+            "launch/social_nav_cases.launch.py",
         ]),
         ("share/" + package_name + "/worlds", glob("worlds/*.world")),
     ],
@@ -46,6 +48,9 @@ setup(
             "local_planner = ros_humans_ros2.local_planner:main",
             "human_detector_red = ros_humans_ros2.human_detector_red:main",
             "localization_node = ros_humans_ros2.localization_node:main",
+            "live_visualization_node = ros_humans_ros2.live_visualization_node:main",
+            "human_case_controller = ros_humans_ros2.human_case_controller:main",
+            "social_nav_planner    = ros_humans_ros2.social_nav_planner:main",
         ],
     },
 )

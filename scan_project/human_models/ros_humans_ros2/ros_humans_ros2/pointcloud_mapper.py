@@ -24,7 +24,7 @@ class PointCloudMapper(Node):
         # Parameters
         self.declare_parameter("map_frame", "map")
         self.declare_parameter("robot_frame", "base_footprint")
-        self.declare_parameter("max_points", 50000)
+        self.declare_parameter("max_points", 10000)
         self.declare_parameter("map_resolution", 0.1)  # 10cm per cell
         self.declare_parameter("map_size", 28.0)  # 28m x 28m map (matches static map)
         # Robot spawn position in world/map frame.
@@ -527,9 +527,16 @@ class PointCloudMapper(Node):
 def main():
     rclpy.init()
     node = PointCloudMapper()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+    try:
+        rclpy.spin(node)
+    except (KeyboardInterrupt, rclpy.executors.ExternalShutdownException):
+        pass
+    finally:
+        node.destroy_node()
+        try:
+            rclpy.shutdown()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

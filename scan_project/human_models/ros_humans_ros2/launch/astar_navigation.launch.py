@@ -274,7 +274,7 @@ def generate_launch_description():
             output="screen",
             parameters=[{
                 "detection_rate": 5.0,
-                "min_contour_area": 100,
+                "min_contour_area": 40,
                 "max_detect_range": 12.0,
                 "track_timeout": 1.5,
                 "publish_timeout": 0.6,
@@ -286,8 +286,8 @@ def generate_launch_description():
                 "red_s_min": 50,
                 "red_v_min": 50,
                 "cam_focal_px": 320.0,
-                "reference_size": 0.5,         # human body diameter ~0.5m
-                "reference_height": 1.7,       # human body height ~1.7m
+                "reference_size": 0.5,         # human head diameter ~0.5m
+                "reference_height": 0.5,       # head sphere diameter (visible red part)
                 "cam_hfov_deg": 90.0,
                 "use_lidar_fusion": True,
                 "lidar_bearing_tolerance": 0.15,

@@ -358,12 +358,13 @@ class WeightedGrid:
     def _los_grid(self, a, b):
         """Safety-aware line-of-sight check between two grid cells.
 
-        Rejects lines that pass through obstacles OR high-cost cells
-        (base_weight > threshold), so the simplified path maintains
-        safe clearance from walls.  Also checks a 1-cell band on each
-        side of the line for obstacle proximity.
+        Rejects lines that pass through obstacles, high-cost base cells
+        (near walls), OR cells with elevated dynamic weights (human
+        zones).  This prevents the path simplifier from collapsing
+        A*-detours around humans back into a straight line.
         """
-        COST_THRESHOLD = 3.0  # reject LOS through cells with weight ≥ this
+        BASE_COST_THRESHOLD = 3.0   # reject through inflated wall cells
+        DYN_COST_THRESHOLD  = 1.5   # reject through human weight zones
         x0, y0 = a
         x1, y1 = b
         dx = abs(x1 - x0)
@@ -376,7 +377,10 @@ class WeightedGrid:
             if not self.in_bounds(x, y) or self.obstacles[y, x]:
                 return False
             # Block LOS through high-cost cells (near-wall proximity)
-            if self.base_weights[y, x] >= COST_THRESHOLD:
+            if self.base_weights[y, x] >= BASE_COST_THRESHOLD:
+                return False
+            # Block LOS through human weight zones (dynamic weights)
+            if self.dynamic_weights[y, x] >= DYN_COST_THRESHOLD:
                 return False
             # Check 1-cell lateral band for obstacles (safety corridor)
             for ox, oy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:

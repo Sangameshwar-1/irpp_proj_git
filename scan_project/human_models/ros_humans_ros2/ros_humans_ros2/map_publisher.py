@@ -145,14 +145,16 @@ class MapPublisher(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = MapPublisher()
-    
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, rclpy.executors.ExternalShutdownException):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        try:
+            rclpy.shutdown()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

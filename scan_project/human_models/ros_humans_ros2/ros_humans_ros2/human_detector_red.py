@@ -53,61 +53,96 @@ except ImportError:
 
 # ─── Tracked target ──────────────────────────────────────────────────────────
 
-class TrackedTarget:
-    """Lightweight tracker for a single red detection with EMA smoothing."""
-    _next_id = 0
+class KalmanTrackedTarget:
+    """Kalman-filter tracker for a single red detection.
 
-    # Position smoothing factor: lower = smoother but more lag
-    POS_ALPHA = 0.35
-    # Velocity smoothing factor
-    VEL_ALPHA = 0.3
-    # Max plausible human speed (m/s) — reject larger jumps as noise
-    MAX_HUMAN_SPEED = 1.5
+    State vector: [x, y, vx, vy] in world frame.
+    Implements the full predict + update cycle described in the tracking spec.
+    Exposes the same external interface as the old EMA tracker so the rest
+    of the node code is unchanged.
+    """
+    _next_id = 0
+    MAX_HUMAN_SPEED = 1.5   # m/s — reject faster jumps as sensor noise
 
     def __init__(self, x, y, stamp):
-        self.id = TrackedTarget._next_id
-        TrackedTarget._next_id += 1
-        self.x = x
-        self.y = y
-        self.vx = 0.0
-        self.vy = 0.0
-        self.last_seen = stamp
+        self.id = KalmanTrackedTarget._next_id
+        KalmanTrackedTarget._next_id += 1
         self.hits = 1
-        # Keep raw detection for velocity calc (before smoothing)
-        self._raw_x = x
-        self._raw_y = y
+        self.last_seen = stamp
+
+        # State vector [x, y, vx, vy]
+        self.X = np.array([x, y, 0.0, 0.0], dtype=float)
+        # Initial covariance — high uncertainty on velocity
+        self.P = np.diag([0.5, 0.5, 2.0, 2.0])
+        # Measurement matrix H: we observe x and y only
+        self.H = np.array([[1., 0., 0., 0.],
+                           [0., 1., 0., 0.]])
+        # Measurement noise covariance R (LiDAR cluster accuracy ~0.1 m)
+        self.R = np.diag([0.1, 0.1])
+        # Process noise rate (motion uncertainty accumulated per second)
+        self._Q_rate = np.diag([0.01, 0.01, 0.05, 0.05])
+
+    # ── Read-only properties matching old tracker interface ──────────────────
+    @property
+    def x(self):
+        return float(self.X[0])
+
+    @property
+    def y(self):
+        return float(self.X[1])
+
+    @property
+    def vx(self):
+        return float(self.X[2])
+
+    @property
+    def vy(self):
+        return float(self.X[3])
+
+    def dist(self, x, y):
+        return math.hypot(self.X[0] - x, self.X[1] - y)
+
+    def predict(self, dt):
+        """Non-mutating position forecast — used for velocity arrows only."""
+        return (self.X[0] + self.X[2] * dt,
+                self.X[1] + self.X[3] * dt)
+
+    # ── Internal Kalman steps ─────────────────────────────────────────────────
+    def _kf_predict(self, dt):
+        """Kalman prediction step: X = F*X,  P = F*P*F' + Q  (mutates state)."""
+        F = np.array([[1., 0., dt, 0.],
+                      [0., 1., 0., dt],
+                      [0., 0., 1.,  0.],
+                      [0., 0., 0.,  1.]])
+        self.X = F @ self.X
+        self.P = F @ self.P @ F.T + self._Q_rate * dt
 
     def update(self, x, y, stamp):
-        dt = stamp - self.last_seen
-        if dt > 0.01:
-            # Velocity from raw (un-smoothed) positions
-            nvx = (x - self._raw_x) / dt
-            nvy = (y - self._raw_y) / dt
-            spd = math.hypot(nvx, nvy)
-            if spd < self.MAX_HUMAN_SPEED:
-                self.vx = self.VEL_ALPHA * nvx + (1 - self.VEL_ALPHA) * self.vx
-                self.vy = self.VEL_ALPHA * nvy + (1 - self.VEL_ALPHA) * self.vy
-            # else: ignore — likely noise, keep old velocity
+        """Full Kalman predict + update with new measurement (x, y)."""
+        dt = max(stamp - self.last_seen, 0.001)
 
-        self._raw_x = x
-        self._raw_y = y
+        # Reject implausible position jumps once the track is established
+        if self.hits > 3:
+            speed = math.hypot(x - self.X[0], y - self.X[1]) / dt
+            if speed > self.MAX_HUMAN_SPEED:
+                # Likely noise — propagate prediction only, skip measurement
+                self._kf_predict(dt)
+                self.last_seen = stamp
+                return
 
-        # EMA-smooth position to reduce jitter / drift
-        if self.hits > 1:
-            self.x = self.POS_ALPHA * x + (1 - self.POS_ALPHA) * self.x
-            self.y = self.POS_ALPHA * y + (1 - self.POS_ALPHA) * self.y
-        else:
-            self.x = x
-            self.y = y
+        # 1. Prediction step (time update)
+        self._kf_predict(dt)
+
+        # 2. Update step (measurement update)
+        z = np.array([x, y])
+        innov = z - self.H @ self.X                       # innovation
+        S = self.H @ self.P @ self.H.T + self.R           # innovation covariance
+        K = self.P @ self.H.T @ np.linalg.inv(S)          # Kalman gain
+        self.X = self.X + K @ innov                        # updated state
+        self.P = (np.eye(4) - K @ self.H) @ self.P        # updated covariance
 
         self.last_seen = stamp
         self.hits += 1
-
-    def predict(self, dt):
-        return (self.x + self.vx * dt, self.y + self.vy * dt)
-
-    def dist(self, x, y):
-        return math.hypot(self.x - x, self.y - y)
 
 
 # ─── Detection node ──────────────────────────────────────────────────────────
@@ -132,7 +167,7 @@ class HumanDetectorRed(Node):
 
         # ── Parameters ────────────────────────────────────────────────
         self.declare_parameter("detection_rate", 5.0)
-        self.declare_parameter("min_contour_area", 100)
+        self.declare_parameter("min_contour_area", 40)
         self.declare_parameter("max_detect_range", 8.0)
         self.declare_parameter("track_timeout", 3.0)
         # Red HSV thresholds (red wraps around H=0/180)
@@ -144,8 +179,8 @@ class HumanDetectorRed(Node):
         self.declare_parameter("red_v_min", 80)
         # Pinhole camera model
         self.declare_parameter("cam_focal_px", 320.0)
-        self.declare_parameter("reference_size", 0.5)    # metres — body WIDTH (diameter)
-        self.declare_parameter("reference_height", 1.7)  # metres — body HEIGHT (for tall blobs)
+        self.declare_parameter("reference_size", 0.5)    # metres — head WIDTH (diameter)
+        self.declare_parameter("reference_height", 0.5)  # metres — head sphere diameter (visible red part)
         self.declare_parameter("cam_hfov_deg", 90.0)
         self.declare_parameter("show_debug_window", True)
         # LiDAR fusion: prefer LiDAR range when available
@@ -191,10 +226,10 @@ class HumanDetectorRed(Node):
         self.robot_x = 0.0
         self.robot_y = 0.0
         self.robot_yaw = 0.0
-        self.tracked: list[TrackedTarget] = []
+        self.tracked: list[KalmanTrackedTarget] = []
         self.scan_data = None  # latest LiDAR scan
         # Reject detections within this fraction of image edge (camera overlap)
-        self.edge_margin = 0.08  # 8% of image width on each side
+        self.edge_margin = 0.15  # 15% of image width on each side
 
         # ── Publishers ────────────────────────────────────────────────
         self.humans_pub = self.create_publisher(
@@ -244,44 +279,113 @@ class HumanDetectorRed(Node):
     def _scan_cb(self, msg):
         self.scan_data = msg
 
-    # ── LiDAR range lookup ────────────────────────────────────────────
+    # ── LiDAR cluster-based position estimation ────────────────────────
 
-    def _lidar_range_at_bearing(self, world_bearing):
-        """Get LiDAR range at a world-frame bearing.
+    def _lidar_cluster_at_bearing(self, world_bearing, robot_x, robot_y, robot_yaw,
+                                   window_deg=10.0):
+        """Estimate human position from LiDAR using camera-guided clustering.
 
-        The LiDAR scan is in the robot body frame, so we subtract robot_yaw
-        to get the scan-frame angle, then find the closest valid range.
-        Returns the range in metres, or None if no valid reading.
+        Pipeline (per tracking spec steps 5–9):
+          1. Convert world bearing to robot-local angle.
+          2. Collect scan points within ±window_deg of that angle.
+          3. Convert polar (r, α) to robot-frame Cartesian (lx, ly).
+          4. Distance-based clustering: gap > 0.3 m starts a new cluster.
+          5. Filter clusters by width: 0.1–0.8 m (human head/body).
+          6. Select the cluster whose centroid angle is closest to the
+             camera bearing.
+          7. Convert cluster centroid from robot frame to world frame.
+
+        `window_deg` is widened automatically for close-range/near-edge blobs
+        where the camera bearing is less reliable.
+
+        Returns (world_x, world_y) or None if no valid cluster found.
         """
         if self.scan_data is None:
             return None
 
         scan = self.scan_data
-        # Convert world bearing to robot-local bearing
-        local_bearing = world_bearing - self.robot_yaw
-        # Normalise to [-pi, pi]
+        # World bearing → robot-local bearing
+        local_bearing = world_bearing - robot_yaw
         while local_bearing > math.pi:
             local_bearing -= 2 * math.pi
         while local_bearing < -math.pi:
             local_bearing += 2 * math.pi
 
-        # Find the scan index closest to this bearing
         if local_bearing < scan.angle_min or local_bearing > scan.angle_max:
             return None
 
-        idx_center = int((local_bearing - scan.angle_min) / scan.angle_increment)
-        n_rays = len(scan.ranges)
-        # Check a window of rays around the bearing
-        window = max(1, int(self.lidar_tol / scan.angle_increment))
-        best_range = None
-        for di in range(-window, window + 1):
-            idx = idx_center + di
-            if 0 <= idx < n_rays:
-                r = scan.ranges[idx]
-                if scan.range_min < r < scan.range_max:
-                    if best_range is None or r < best_range:
-                        best_range = r
-        return best_range
+        # Angular window around camera detection (adaptive, caller-specified)
+        window_rad = math.radians(window_deg)
+        idx_min = max(0, int(
+            (local_bearing - window_rad - scan.angle_min) / scan.angle_increment))
+        idx_max = min(len(scan.ranges) - 1, int(
+            (local_bearing + window_rad - scan.angle_min) / scan.angle_increment))
+
+        # Step 6: convert valid scan rays to robot-frame Cartesian points
+        pts = []  # list of (lx, ly) in robot frame
+        for i in range(idx_min, idx_max + 1):
+            r = scan.ranges[i]
+            if not (scan.range_min < r < min(scan.range_max, self.max_range)):
+                continue
+            a = scan.angle_min + i * scan.angle_increment
+            pts.append((r * math.cos(a), r * math.sin(a)))
+
+        if not pts:
+            return None
+
+        # Step 7: distance-based clustering (gap threshold 0.3 m)
+        clusters = []
+        current = [pts[0]]
+        for i in range(1, len(pts)):
+            dx = pts[i][0] - pts[i - 1][0]
+            dy = pts[i][1] - pts[i - 1][1]
+            if math.hypot(dx, dy) < 0.3:    # same cluster
+                current.append(pts[i])
+            else:
+                clusters.append(current)
+                current = [pts[i]]
+        clusters.append(current)
+
+        # Step 8: filter by cluster width (human head/body: 0.1–0.8 m)
+        # and select the cluster whose centroid direction best matches
+        # the camera-derived bearing
+        best_cluster = None
+        best_angle_diff = float('inf')
+        for clust in clusters:
+            xs = [p[0] for p in clust]
+            ys = [p[1] for p in clust]
+            width = math.hypot(max(xs) - min(xs), max(ys) - min(ys))
+            # Multi-point clusters must pass the width filter;
+            # single-point clusters (head at long range) are always kept
+            if len(clust) > 1 and not (0.1 <= width <= 0.8):
+                continue
+            # Step 9: cluster centroid
+            cx = sum(xs) / len(xs)
+            cy = sum(ys) / len(ys)
+            angle_diff = abs(math.atan2(cy, cx) - local_bearing)
+            if angle_diff > math.pi:
+                angle_diff = 2 * math.pi - angle_diff
+            if angle_diff < best_angle_diff:
+                best_angle_diff = angle_diff
+                best_cluster = (cx, cy)
+
+        if best_cluster is None:
+            return None
+
+        # ── Center correction ──────────────────────────────────────────
+        # The LiDAR hits the NEAR FACE of the human body/head, not the
+        # geometric centre.  Push the cluster centroid by one body radius
+        # (≈0.22 m) in the camera bearing direction to recover the true
+        # centre.  Without this, the Kalman filter sees the "near face"
+        # drifting as the robot changes angle, generating spurious velocity.
+        _HUMAN_RADIUS = 0.22   # m — conservative average of body (0.25) and head (0.25)
+        lx = best_cluster[0] + _HUMAN_RADIUS * math.cos(local_bearing)
+        ly = best_cluster[1] + _HUMAN_RADIUS * math.sin(local_bearing)
+
+        # Robot frame → world frame (2-D rigid body transform)
+        wx = robot_x + lx * math.cos(robot_yaw) - ly * math.sin(robot_yaw)
+        wy = robot_y + lx * math.sin(robot_yaw) + ly * math.cos(robot_yaw)
+        return wx, wy
 
     # ── Detection tick ────────────────────────────────────────────────
 
@@ -300,10 +404,16 @@ class HumanDetectorRed(Node):
                 raw.extend(self._detect(self.images[cam], cam, pose))
                 self.image_new[cam] = False  # consumed
 
+        # ── Cluster raw detections ──
+        # When multiple cameras see the same human, they produce slightly
+        # different world positions.  Cluster nearby raw detections into
+        # a single averaged point BEFORE feeding to the tracker.
+        raw = self._cluster_raw(raw, radius=1.2)
+
         # ── Update tracker ──
         matched = set()
         for wx, wy in raw:
-            best, best_d = None, 3.5  # wider association radius
+            best, best_d = None, 2.0  # tighter association radius
             for t in self.tracked:
                 if id(t) in matched:
                     continue  # don't match multiple detections to same track
@@ -315,7 +425,7 @@ class HumanDetectorRed(Node):
                 best.update(wx, wy, now)
                 matched.add(id(best))
             else:
-                self.tracked.append(TrackedTarget(wx, wy, now))
+                self.tracked.append(KalmanTrackedTarget(wx, wy, now))
 
         # Prune stale
         self.tracked = [t for t in self.tracked
@@ -332,7 +442,7 @@ class HumanDetectorRed(Node):
         vel_msg.header = pos_msg.header
 
         for t in self.tracked:
-            if t.hits < 2:
+            if t.hits < 3:
                 continue
             # Only publish targets with recent evidence (within publish_timeout).
             # Stale targets stay in self.tracked for re-association but are NOT
@@ -355,9 +465,10 @@ class HumanDetectorRed(Node):
         self.vel_pub.publish(vel_msg)
         self._publish_markers()
 
-        if pos_msg.poses and self.get_clock().now().nanoseconds % 2_000_000_000 < 200_000_000:
+        if pos_msg.poses:
             self.get_logger().info(
-                f"Detected {len(pos_msg.poses)} red target(s)")
+                f"Detected {len(pos_msg.poses)} red target(s)",
+                throttle_duration_sec=5.0)
 
         if self.show_debug:
             self._debug_window()
@@ -373,9 +484,8 @@ class HumanDetectorRed(Node):
 
         Range estimation priority:
           1. LiDAR range at the detection bearing (most accurate)
-          2. Pinhole model using blob WIDTH and body diameter reference
-             (height-based estimation is unreliable because the 1.7 m body
-              is vertically clipped by the 480 px frame at close range)
+          2. Pinhole model using blob WIDTH and head diameter reference
+             (only the head sphere is red; body is beige/neutral)
         """
         h, w = img.shape[:2]
         dets = []
@@ -417,11 +527,30 @@ class HumanDetectorRed(Node):
             if bw < 5 and bh < 5:
                 continue
 
-            # ── Reject detections near image edges (camera overlap zone) ──
+            # ── Reject if bounding box is clipped at the horizontal edges ──
+            # Centroid-only check misses blobs whose EDGE is cut off.
+            # A clipped bbox means the blob width is artificially small →
+            # pinhole overestimates range; the bearing is also wrong.
             cx = x_r + bw / 2.0
-            margin_px = w * self.edge_margin
+            margin_px = w * self.edge_margin          # 15% margin for centroid
+            bbox_margin = w * 0.05                    # 5% inner check for bbox edge
             if cx < margin_px or cx > w - margin_px:
-                continue  # skip — likely also seen by the adjacent camera
+                continue  # centroid in overlap zone
+            if x_r < bbox_margin or (x_r + bw) > (w - bbox_margin):
+                continue  # bbox physically touches the edge → clipped blob
+
+            # ── Reject vertically clipped blobs (close-range partial head) ──
+            # When the robot is very close the head fills the frame vertically
+            # and gets clipped top/bottom → bw is wrong → bad pinhole range.
+            vert_margin = 8  # pixels
+            if y_r < vert_margin or (y_r + bh) > (h - vert_margin):
+                continue
+
+            # ── Aspect ratio filter (head sphere ≈ circular in image) ──
+            # Extreme ratios indicate a partially-visible or clipped blob.
+            aspect = bw / max(bh, 1)
+            if not (0.35 <= aspect <= 3.0):
+                continue
 
             # ── Bearing from centroid ──
             norm_x = (cx / w) - 0.5
@@ -430,33 +559,81 @@ class HumanDetectorRed(Node):
             # Use the pose AT capture time (not current pose)
             world_bear = pose_yaw + cam_bear + bearing_cam
 
-            # ── Range estimation ──
-            est_range = None
+            # ── Adaptive LiDAR window ──────────────────────────────────
+            # blob_frac = fraction of frame width the blob occupies.
+            # Large blob → human is close → bearing is less reliable →
+            # widen the LiDAR search window so we don’t miss the cluster.
+            blob_frac = bw / w
+            edge_prox = min(cx, w - cx) / w   # 0 = at edge, 0.5 = centre
+            if blob_frac > 0.10 or edge_prox < 0.30:
+                lidar_window = 22.0   # wide: close range or near edge
+            else:
+                lidar_window = 10.0   # normal
 
-            # Method 1: LiDAR fusion (most accurate)
+            # ── Position estimation ─────────────────────────────────────
+            world_pos = None
+
+            # Method 1: LiDAR cluster (steps 5–9 of tracking spec)
+            # Extracts scan points in ±lidar_window°, distance-clusters them,
+            # filters by human body width, returns cluster centroid in
+            # world frame.  Most accurate when LiDAR hits the human.
             if self.use_lidar:
-                lidar_r = self._lidar_range_at_bearing(world_bear)
-                if lidar_r is not None and 0.3 < lidar_r < self.max_range:
-                    est_range = lidar_r
+                world_pos = self._lidar_cluster_at_bearing(
+                    world_bear, pose_x, pose_y, pose_yaw,
+                    window_deg=lidar_window)
 
-            # Method 2: Pinhole model — ALWAYS use blob WIDTH
-            # The body height (1.7 m) gets clipped by the 480 px frame at
-            # ranges < ~2 m (camera is at 0.3 m height, body is 0–1.7 m),
-            # making bh unreliable.  Blob width maps to the consistent
-            # body diameter (0.5 m) and is always fully visible.
-            if est_range is None:
-                if bw >= 5:
-                    est_range = (self.ref_width * self.focal) / bw
+            # Method 2: Pinhole model fallback
+            # Only used when LiDAR cluster was not found AND the blob is
+            # NOT large (large blob = close range = pinhole is least reliable
+            # because the visible fraction of the head is unpredictable).
+            if world_pos is None and bw >= 5 and blob_frac < 0.12:
+                est_range = (self.ref_width * self.focal) / bw
+                if 0.3 < est_range < self.max_range:
+                    world_pos = (pose_x + est_range * math.cos(world_bear),
+                                 pose_y + est_range * math.sin(world_bear))
 
-            if est_range is None or est_range > self.max_range or est_range < 0.3:
+            if world_pos is None:
                 continue
 
-            # ── World-frame position (using pose AT capture time) ──
-            wx = pose_x + est_range * math.cos(world_bear)
-            wy = pose_y + est_range * math.sin(world_bear)
-            dets.append((wx, wy))
+            dets.append(world_pos)
 
         return dets
+
+    @staticmethod
+    def _cluster_raw(points, radius=1.2):
+        """Cluster nearby raw detections and return centroid of each cluster.
+
+        When multiple cameras see the same human, they produce slightly
+        different world-frame positions.  This merges detections within
+        `radius` metres into a single averaged point so the tracker only
+        sees ONE detection per real human per tick.
+
+        Uses simple greedy clustering (fast for small N).
+        """
+        if len(points) <= 1:
+            return points
+
+        used = [False] * len(points)
+        clusters = []
+        for i in range(len(points)):
+            if used[i]:
+                continue
+            cx, cy = points[i]
+            n = 1
+            used[i] = True
+            for j in range(i + 1, len(points)):
+                if used[j]:
+                    continue
+                dx = points[j][0] - cx
+                dy = points[j][1] - cy
+                if math.hypot(dx, dy) < radius:
+                    # Running centroid update
+                    cx = (cx * n + points[j][0]) / (n + 1)
+                    cy = (cy * n + points[j][1]) / (n + 1)
+                    n += 1
+                    used[j] = True
+            clusters.append((cx, cy))
+        return clusters
 
     def _merge_duplicates(self, min_dist):
         """Merge tracked targets that are within min_dist of each other.
@@ -497,7 +674,7 @@ class HumanDetectorRed(Node):
         now = time.time()
         mid = 0
         for t in self.tracked:
-            if t.hits < 2:
+            if t.hits < 3:
                 continue
             # Skip stale targets — no marker for ghosts
             if now - t.last_seen > self.publish_timeout:
@@ -596,8 +773,8 @@ class HumanDetectorRed(Node):
             grid = np.vstack([top, bot])
             now_t = time.time()
             n_active = sum(1 for t in self.tracked
-                           if t.hits >= 2 and now_t - t.last_seen <= self.publish_timeout)
-            n_total = sum(1 for t in self.tracked if t.hits >= 2)
+                           if t.hits >= 3 and now_t - t.last_seen <= self.publish_timeout)
+            n_total = sum(1 for t in self.tracked if t.hits >= 3)
             cv2.putText(grid, f"Active: {n_active}  (tracked: {n_total})",
                         (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
                         (0, 255, 255), 2)
@@ -610,9 +787,16 @@ class HumanDetectorRed(Node):
 def main():
     rclpy.init()
     node = HumanDetectorRed()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+    try:
+        rclpy.spin(node)
+    except (KeyboardInterrupt, rclpy.executors.ExternalShutdownException):
+        pass
+    finally:
+        node.destroy_node()
+        try:
+            rclpy.shutdown()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

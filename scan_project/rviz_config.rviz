@@ -197,6 +197,75 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /detected_humans_markers
+    # ══════════ LIVE VISUALIZATION NODE ══════════
+    # ── GT occupancy grid (humans at true Gazebo positions) ──
+    - Alpha: 0.4
+      Class: rviz_default_plugins/Map
+      Color Scheme: costmap
+      Draw Behind: false
+      Enabled: false
+      Name: "GT Occupancy (Gazebo truth)"
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /viz/gt_occupancy
+      Use Timestamp: false
+    # ── Perception occupancy grid (humans where the robot THINKS they are) ──
+    - Alpha: 0.4
+      Class: rviz_default_plugins/Map
+      Color Scheme: costmap
+      Draw Behind: false
+      Enabled: false
+      Name: "Perception Occupancy (robot estimate)"
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /viz/perception_occupancy
+      Use Timestamp: false
+    # ── Robot estimate + detected humans (cyan arrow + orange spheres) ──
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: "Robot Estimate + Detected Humans"
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /viz/robot_estimate
+    # ── Ground truth markers (green arrow + magenta humans) ──
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: "Ground Truth (Gazebo)"
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /viz/gt_markers
+    # ── Social circles (intimate/personal/social rings) ──
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: "Social Circles"
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /viz/social_circles
+    # ── Social nav planner visualisation (collision cone, decision text) ──
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: SocialNavMarkers
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /social_nav_markers
 
   Global Options:
     Background Color: 48; 48; 48

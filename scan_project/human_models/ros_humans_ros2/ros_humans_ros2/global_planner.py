@@ -56,6 +56,16 @@ class GlobalPlanner(Node):
         self.declare_parameter("room_max_x", 13.0)
         self.declare_parameter("room_min_y", -13.0)
         self.declare_parameter("room_max_y", 13.0)
+        # ── Proactive monitoring parameters ───────────────────────────
+        self.declare_parameter("proactive_check_rate", 1.0)       # Hz
+        # proactive_replan_radius is set BELOW zone_radius so that once the
+        # planner reroutes the path outside the zone, the monitor no longer
+        # sees the path as a threat and stops re-triggering.
+        self.declare_parameter("proactive_replan_radius", 0.75)   # m – human→path distance to trigger
+        self.declare_parameter("proactive_zone_radius", 0.8)      # m – weight zone radius
+        self.declare_parameter("proactive_weight", 20.0)           # weight multiplier (high = strong avoidance)
+        self.declare_parameter("proactive_cooldown", 10.0)         # s between proactive replans
+        self.declare_parameter("predict_horizon", 3.0)             # s – human velocity projection
 
         self.planner_res = self.get_parameter("planner_resolution").value
         self.inflation = self.get_parameter("inflation_radius").value
@@ -67,6 +77,12 @@ class GlobalPlanner(Node):
         self.room_max_x = self.get_parameter("room_max_x").value
         self.room_min_y = self.get_parameter("room_min_y").value
         self.room_max_y = self.get_parameter("room_max_y").value
+        self.proactive_rate = self.get_parameter("proactive_check_rate").value
+        self.proactive_radius = self.get_parameter("proactive_replan_radius").value
+        self.proactive_zone_r = self.get_parameter("proactive_zone_radius").value
+        self.proactive_weight = self.get_parameter("proactive_weight").value
+        self.proactive_cooldown = self.get_parameter("proactive_cooldown").value
+        self.predict_horizon = self.get_parameter("predict_horizon").value
 
         # ── State ─────────────────────────────────────────────────────
         self.grid = None                    # WeightedGrid (built from /map)
@@ -80,6 +96,12 @@ class GlobalPlanner(Node):
         self.map_received = False
         self.pose_received = False
         self.weight_zones = []              # latest zones from local planner
+
+        # ── Proactive human tracking ──────────────────────────────────
+        self.detected_humans = []           # [(x, y), ...] from /detected_humans
+        self.detected_human_vels = []       # [(vx, vy), ...] from /human_velocities
+        self.last_proactive_replan = 0.0    # monotonic time of last proactive replan
+        self.proactive_human_set = set()    # track which humans already caused replans
 
         # ── Publishers ────────────────────────────────────────────────
         self.path_pub = self.create_publisher(Path, "/global_path", 10)
@@ -106,10 +128,20 @@ class GlobalPlanner(Node):
         self.replan_sub = self.create_subscription(
             PoseStamped, "/replan_request", self.replan_cb, 10)
 
+        # ── Proactive human subscriptions ─────────────────────────────
+        self.create_subscription(
+            PoseArray, "/detected_humans", self._humans_cb, 10)
+        self.create_subscription(
+            PoseArray, "/human_velocities", self._hvel_cb, 10)
+
         # ── Timers ────────────────────────────────────────────────────
         self.create_timer(2.0, self.publish_grid_viz)
         self.init_ticks = 0
         self.create_timer(0.1, self.init_check)
+        # Proactive path monitor — continuously checks path vs humans
+        if self.proactive_rate > 0:
+            self.create_timer(
+                1.0 / self.proactive_rate, self._proactive_monitor)
 
         self.get_logger().info("Global planner started (waiting for /map)…")
 
@@ -169,8 +201,120 @@ class GlobalPlanner(Node):
         start_x = msg.pose.position.x
         start_y = msg.pose.position.y
         self.get_logger().info(
-            f"Replan requested from ({start_x:.2f}, {start_y:.2f})")
+            f"Replan requested from ({start_x:.2f}, {start_y:.2f})",
+            throttle_duration_sec=3.0)
         self.plan_path(start_x, start_y, is_replan=True)
+
+    # ── Proactive human callbacks ─────────────────────────────────────
+
+    def _humans_cb(self, msg):
+        """Receive detected humans directly for proactive monitoring."""
+        self.detected_humans = [(p.position.x, p.position.y) for p in msg.poses]
+
+    def _hvel_cb(self, msg):
+        """Receive human velocities for proactive prediction."""
+        self.detected_human_vels = [
+            (p.position.x, p.position.y) for p in msg.poses]
+
+    # ── Proactive path monitoring ─────────────────────────────────────
+
+    def _proactive_monitor(self):
+        """Periodically check if any detected human threatens the current
+        path.  If so, build weight zones and replan BEFORE the robot gets
+        close.  This is the key difference from the reactive local-planner
+        reroute — we look at the ENTIRE remaining path, not just nearby
+        segments."""
+        if (not self.current_path_world
+                or not self.detected_humans
+                or self.grid is None
+                or self.goal_x is None):
+            return
+
+        now = self.get_clock().now().nanoseconds / 1e9
+        if now - self.last_proactive_replan < self.proactive_cooldown:
+            return
+
+        # ── Check every detected human against the FULL path ──────
+        threatening = []  # [(hx, hy, vx, vy, min_dist_to_path), ...]
+
+        for hi, (hx, hy) in enumerate(self.detected_humans):
+            vx, vy = 0.0, 0.0
+            if hi < len(self.detected_human_vels):
+                vx, vy = self.detected_human_vels[hi]
+
+            # Find minimum distance from this human to ANY path
+            # SEGMENT (not just waypoints).  With simplified paths the
+            # waypoints can be far apart while the line between them
+            # passes right through the human.
+            min_d = float("inf")
+            path = self.current_path_world
+            for si in range(len(path) - 1):
+                d = self._pt_seg_dist(
+                    hx, hy,
+                    path[si][0], path[si][1],
+                    path[si + 1][0], path[si + 1][1])
+                if d < min_d:
+                    min_d = d
+            # Also distance to last waypoint
+            d = math.hypot(hx - path[-1][0], hy - path[-1][1])
+            if d < min_d:
+                min_d = d
+
+            # Also check predicted future positions
+            speed = math.hypot(vx, vy)
+            if speed > 0.05:
+                for dt in [1.0, 2.0, 3.0]:
+                    if dt > self.predict_horizon:
+                        break
+                    px = hx + vx * dt
+                    py = hy + vy * dt
+                    for si in range(len(path) - 1):
+                        d = self._pt_seg_dist(
+                            px, py,
+                            path[si][0], path[si][1],
+                            path[si + 1][0], path[si + 1][1])
+                        if d < min_d:
+                            min_d = d
+
+            if min_d < self.proactive_radius:
+                threatening.append((hx, hy, vx, vy, min_d))
+
+        if not threatening:
+            # No humans near path — if we previously had zones, clear them
+            if self.weight_zones:
+                self.weight_zones = []
+                self.grid.reset_dynamic_weights()
+            return
+
+        # ── Build weight zones for ALL threatening humans ──────────
+        zones = []
+        for hx, hy, vx, vy, _ in threatening:
+            speed = math.hypot(vx, vy)
+            # Current position zone
+            zones.append(
+                (hx, hy, self.proactive_zone_r, self.proactive_weight))
+            # Predicted future position zones (if moving)
+            if speed > 0.05:
+                steps = max(1, int(self.predict_horizon / 0.5))
+                for s in range(1, steps + 1):
+                    dt = s * 0.5
+                    px = hx + vx * dt
+                    py = hy + vy * dt
+                    decay = 1.0 - (dt / (self.predict_horizon + 0.1)) * 0.5
+                    w = max(2.0, self.proactive_weight * decay)
+                    zones.append((px, py, self.proactive_zone_r, w))
+
+        self.weight_zones = zones
+
+        # Log the proactive replan (throttled)
+        dists = [f"{d:.1f}m" for _, _, _, _, d in threatening]
+        self.get_logger().info(
+            f"⚡ Proactive replan: {len(threatening)} human(s) near path "
+            f"(distances: {', '.join(dists)}), applying {len(zones)} zones",
+            throttle_duration_sec=5.0)
+
+        self.last_proactive_replan = now
+        self.plan_path(self.robot_x, self.robot_y, is_replan=True)
 
     # ── Init auto-start ──────────────────────────────────────────────
 
@@ -198,7 +342,7 @@ class GlobalPlanner(Node):
         # Apply dynamic weight zones (human costs) if any
         if self.weight_zones:
             self.grid.update_dynamic_weights(self.weight_zones)
-            self.get_logger().info(
+            self.get_logger().debug(
                 f"Applied {len(self.weight_zones)} weight zone(s)")
         else:
             self.grid.reset_dynamic_weights()
@@ -206,7 +350,7 @@ class GlobalPlanner(Node):
         start_grid = self.grid.world_to_grid(start_x, start_y)
         goal_grid = self.grid.world_to_grid(self.goal_x, self.goal_y)
 
-        self.get_logger().info(
+        self.get_logger().debug(
             f"A* planning: ({start_x:.2f},{start_y:.2f}) → "
             f"({self.goal_x:.2f},{self.goal_y:.2f})  "
             f"grid {start_grid} → {goal_grid}")
@@ -229,12 +373,12 @@ class GlobalPlanner(Node):
                 ratio = new_dist / old_dist
                 overlap = self._path_overlap(self.current_path_world, world_path)
                 if overlap > 0.6:
-                    self.get_logger().info(
+                    self.get_logger().debug(
                         f"↳ Minor deviation  "
                         f"({new_dist:.1f}m vs {old_dist:.1f}m, "
                         f"{overlap*100:.0f}% overlap)")
                 else:
-                    self.get_logger().info(
+                    self.get_logger().debug(
                         f"↳ Full path change  "
                         f"({new_dist:.1f}m vs {old_dist:.1f}m, "
                         f"{overlap*100:.0f}% overlap)")
@@ -249,9 +393,20 @@ class GlobalPlanner(Node):
         self._publish_status(True)
 
         self.get_logger().info(
-            f"Path published: {len(world_path)} waypoints, {new_dist:.2f} m")
+            f"Path published: {len(world_path)} waypoints, {new_dist:.2f} m",
+            throttle_duration_sec=3.0)
 
     # ── Helpers ───────────────────────────────────────────────────────
+
+    @staticmethod
+    def _pt_seg_dist(px, py, ax, ay, bx, by):
+        """Distance from point (px,py) to line segment (ax,ay)-(bx,by)."""
+        dx, dy = bx - ax, by - ay
+        len_sq = dx * dx + dy * dy
+        if len_sq < 1e-12:
+            return math.hypot(px - ax, py - ay)
+        t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / len_sq))
+        return math.hypot(px - (ax + t * dx), py - (ay + t * dy))
 
     @staticmethod
     def _world_path_distance(path):
@@ -390,9 +545,16 @@ class GlobalPlanner(Node):
 def main():
     rclpy.init()
     node = GlobalPlanner()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+    try:
+        rclpy.spin(node)
+    except (KeyboardInterrupt, rclpy.executors.ExternalShutdownException):
+        pass
+    finally:
+        node.destroy_node()
+        try:
+            rclpy.shutdown()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
