@@ -1,0 +1,83 @@
+# =============================================================================
+#  IRPP Social Navigation — Docker Compose
+# =============================================================================
+#
+#  Usage:
+#    ./build.sh                             # build the image
+#    ./run.sh                               # start the container (interactive)
+#    ./run.sh navigation                    # start full navigation stack
+#    ./run.sh navigation camera             # navigation with camera perception
+#    ./run.sh test case3                    # run isolated test case
+#
+# =============================================================================
+
+services:
+  irpp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: irpp-social-nav:latest
+    container_name: irpp-social-nav
+
+    # ── Interactive terminal ────────────────────────────────────────
+    stdin_open: true
+    tty: true
+
+    # ── Networking ──────────────────────────────────────────────────
+    network_mode: host
+
+    # ── GUI (X11 forwarding for Gazebo + RViz) ──────────────────────
+    environment:
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      - XAUTHORITY=${XAUTHORITY:-$HOME/.Xauthority}
+      # Force X11 backend (avoid Wayland issues in Docker)
+      - QT_QPA_PLATFORM=xcb
+      - XDG_RUNTIME_DIR=/tmp
+      - ROS_DOMAIN_ID=0
+      - GZ_SIM_RESOURCE_PATH=/root/ros2_ws/src/ros_humans_ros2/worlds
+      # Isolate Gazebo transport partition (prevents stale servers from
+      # previous runs on host networking from injecting the default world).
+      # GZ_PARTITION is the strongest isolation — different partitions
+      # cannot see each other even on the same machine/IPC/network.
+      - GZ_IP=127.0.0.1
+      - GZ_PARTITION=irpp_docker
+      # Override Mesa GL version for Intel Haswell+ GPUs inside Docker
+      - MESA_GL_VERSION_OVERRIDE=3.3
+      # Ogre2 render-to-texture fix for Intel GPUs (prevents black Gazebo viewport)
+      - OGRE_RTT_MODE=Copy
+      # Force EGL rendering for Gazebo (better GPU compat in containers)
+      - __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/50_mesa.json
+      # Force software rendering if no GPU (uncomment if needed)
+      # - LIBGL_ALWAYS_SOFTWARE=1
+
+    volumes:
+      # X11 socket for GUI
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      # X11 auth cookie
+      - ${XAUTHORITY:-$HOME/.Xauthority}:/root/.Xauthority:ro
+      # Persist generated maps between runs
+      - irpp-maps:/root/ros2_maps
+      # GPU device (for Intel/AMD Mesa rendering)
+      - /dev/dri:/dev/dri
+
+    # ── GPU support (uncomment the section for your GPU) ────────────
+
+    # --- NVIDIA GPU (requires nvidia-container-toolkit) ---
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+    # ── IPC for shared memory (needed for ROS 2 DDS) ────────────────
+    ipc: host
+
+    # ── Privileged mode (needed for /dev/dri GPU access) ────────────
+    privileged: true
+
+volumes:
+  irpp-maps:
+    driver: local

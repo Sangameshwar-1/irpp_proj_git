@@ -1,0 +1,30 @@
+# =============================================================================
+#  .dockerignore — Exclude build artifacts and unnecessary files
+# =============================================================================
+
+# Colcon build artifacts
+**/build/
+**/install/
+**/log/
+**/__pycache__/
+**/*.pyc
+**/*.egg-info/
+
+# IDE
+**/.vscode/
+**/.idea/
+
+# Git
+**/.git/
+**/.gitignore
+
+# OS
+**/.DS_Store
+**/Thumbs.db
+
+# Docker (prevent recursive copy)
+Dockerfile
+docker-compose.yml
+.dockerignore
+build.sh
+run.sh
