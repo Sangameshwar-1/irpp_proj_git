@@ -382,7 +382,7 @@ class SocialNavPlanner(Node):
         dist = cd["dist"]
 
         # Always keep weight zone active so replanner has cost info
-        self._pub_weight_zone(hx, hy, radius=1.2, weight=20.0)
+        self._pub_weight_zone(hx, hy, radius=0.8, weight=50.0)
 
         on_path = self._human_on_path(hx, hy, threshold=PERSONAL_RAD)
 
@@ -421,7 +421,7 @@ class SocialNavPlanner(Node):
         if dist < SOCIAL_RAD * 2.0:
             side = self._pass_side(cd)
             self._pub_weight_zone_with_trajectory(
-                hx, hy, hvx, hvy, radius=1.2, weight=20.0,
+                hx, hy, hvx, hvy, radius=0.8, weight=50.0,
                 pass_side=side)
 
         # Velocity-based scale: faster approaching human → slower rover
@@ -453,7 +453,7 @@ class SocialNavPlanner(Node):
         if cd["dist"] < SOCIAL_RAD * 2.0:
             side = self._pass_side(cd)
             self._pub_weight_zone_with_trajectory(
-                hx, hy, hvx_c, hvy_c, radius=1.2, weight=20.0,
+                hx, hy, hvx_c, hvy_c, radius=0.8, weight=50.0,
                 pass_side=side)
 
         # ── Human velocity factor for crossing speed ──────────────
@@ -564,7 +564,7 @@ class SocialNavPlanner(Node):
         if dist < SOCIAL_RAD * 2.5:
             side = self._pass_side(cd)
             self._pub_weight_zone_with_trajectory(
-                hx, hy, hvx, hvy, radius=1.2, weight=20.0,
+                hx, hy, hvx, hvy, radius=0.8, weight=50.0,
                 pass_side=side)
 
         # Velocity-based scale: faster human behind → rover slows more
@@ -838,7 +838,7 @@ class SocialNavPlanner(Node):
 
     # ── Case1 helpers ───────────────────────────────────────────────────
 
-    def _pub_weight_zone(self, wx, wy, radius=1.2, weight=20.0):
+    def _pub_weight_zone(self, wx, wy, radius=0.8, weight=50.0):
         z = PoseArray()
         z.header.frame_id = "map"
         z.header.stamp    = self.get_clock().now().to_msg()
@@ -932,7 +932,7 @@ class SocialNavPlanner(Node):
             return "front"    # human moving away -> go in front
 
     def _pub_weight_zone_with_trajectory(self, hx, hy, hvx, hvy,
-                                         radius=1.2, weight=20.0,
+                                         radius=0.8, weight=50.0,
                                          pass_side="default"):
         """Publish weight zones along the human's trajectory.
 
@@ -1106,7 +1106,7 @@ class SocialNavPlanner(Node):
                     throttle_duration_sec=2.0)
                 self._pub_weight_zone_with_trajectory(
                     hx, hy, hvx, hvy,
-                    radius=1.2, weight=20.0,
+                    radius=0.8, weight=50.0,
                     pass_side=side)
                 self.last_replan_t = now
                 self._send_replan()

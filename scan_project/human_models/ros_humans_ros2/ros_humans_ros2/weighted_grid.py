@@ -98,8 +98,11 @@ class WeightedGrid:
 
         # ── Obstacle inflation → base_weights ────────────────────────
         inflation_cells = max(1, int(inflation_radius / planner_resolution))
-        # Additional lethal zone (cells treated as obstacles) = 0.5m
-        lethal_radius = 0.5
+        # Additional lethal zone (cells treated as obstacles)
+        # 0.20 m ≈ robot half-width (0.14 m) + small margin.  A larger
+        # value (e.g. 0.5) eats too much corridor space and prevents
+        # A* from routing around human weight zones in narrow passages.
+        lethal_radius = 0.20
         lethal_cells = max(1, int(lethal_radius / planner_resolution))
         obs_ys, obs_xs = np.where(grid.obstacles)
 

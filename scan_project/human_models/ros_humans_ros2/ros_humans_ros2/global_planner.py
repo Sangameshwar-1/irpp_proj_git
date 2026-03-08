@@ -63,8 +63,8 @@ class GlobalPlanner(Node):
         # sees the path as a threat and stops re-triggering.
         self.declare_parameter("proactive_replan_radius", 0.75)   # m – human→path distance to trigger
         self.declare_parameter("proactive_zone_radius", 0.8)      # m – weight zone radius
-        self.declare_parameter("proactive_weight", 20.0)           # weight multiplier (high = strong avoidance)
-        self.declare_parameter("proactive_cooldown", 10.0)         # s between proactive replans
+        self.declare_parameter("proactive_weight", 50.0)           # weight multiplier (high = strong avoidance)
+        self.declare_parameter("proactive_cooldown", 3.0)         # s between proactive replans
         self.declare_parameter("predict_horizon", 3.0)             # s – human velocity projection
 
         self.planner_res = self.get_parameter("planner_resolution").value

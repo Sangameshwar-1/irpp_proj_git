@@ -198,8 +198,8 @@ def _launch_setup(context, *args, **kwargs):
                            # Proactive monitoring: replan if human is near path
                            "proactive_replan_radius": 0.75,
                            "proactive_zone_radius":   0.80,
-                           "proactive_weight":       20.0,
-                           "proactive_cooldown":      5.0,
+                           "proactive_weight":       50.0,
+                           "proactive_cooldown":      3.0,
                            "use_sim_time": True}]),
 
         # Social nav planner — replaces local_planner for all scenarios
