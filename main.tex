@@ -1,0 +1,350 @@
+\documentclass[a4paper]{article}
+\usepackage{graphicx}
+\usepackage{twocolceurws}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{microtype}
+\usepackage{hyperref}
+\usepackage{tabularx}
+\pagestyle{empty}
+
+\title{SCAN: Socially Compliant Autonomous Navigation\\
+Vision Bots}
+
+\author{
+JAI SRIKAR M \\ 2024102041 \\
+jaisrikar.m@students.iiit.ac.in \\
+\and
+RITHIK REDDY P \\ 2024102005 \\
+rithik.palla@students.iiit.ac.in \\
+\and
+S SANGAMESHWAR \\ 2024102017 \\
+sale.sangameshwar@students.iiit.ac.in \\
+}
+
+\institution{Intro To Robotics: Perception and Planning, Spring 2026}
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+
+
+\begin{abstract}
+Socially aware navigation is essential for robots operating in human environments where safety, predictability, and comfort are important. In this project we present \textbf{SCAN (Socially Compliant Autonomous Navigation)}, a complete navigation system implemented on a TurtleBot3 platform in Gazebo using ROS~2. The system integrates vision-based human detection, scan-matched odometry for localization, global path planning using the A* algorithm, and a socially-aware local navigation module that adapts robot behaviour based on human motion. The planner classifies human interactions into four behavioural cases including static obstruction, head-on approach, path crossing, and same-direction motion. For each case the robot adjusts speed, path, or trajectory to maintain socially acceptable distances and avoid uncomfortable interactions. The system is evaluated through a series of controlled simulation scenarios demonstrating safe and socially compliant navigation in dynamic environments with moving humans.
+\end{abstract}
+
+
+\section{Introduction}
+
+As mobile robots become increasingly deployed in human-populated environments such as hospitals, airports, offices, and university campuses, the ability to navigate safely and comfortably around people is no longer optional. Traditional navigation systems treat humans as static obstacles, producing trajectories that are technically collision-free but socially unacceptable: robots that cut across walking paths, approach head-on without yielding, or pass uncomfortably close violate the unwritten rules of personal space that govern human locomotion.
+
+Socially aware navigation requires a robot to reason about human motion, classify the nature of each encounter, and adjust its speed, heading, or route accordingly. The robot must respect \textit{proxemic zones}~\cite{hall1966hidden} --- the concentric regions of intimate, personal, and social space that humans maintain during interaction --- while still making progress toward its goal.
+
+In this project we present \textbf{SCAN (Socially Compliant Autonomous Navigation)}, a complete navigation system implemented on a simulated TurtleBot3 platform in Gazebo using ROS~2 Jazzy. SCAN integrates four tightly coupled subsystems: (1)~vision-based human detection from four RGB cameras with Kalman filter tracking, (2)~scan-matched odometry for drift-corrected localization, (3)~global path planning using A* search on a dynamically weighted occupancy grid, and (4)~a case-based social navigation planner that classifies each human encounter into one of five behavioural cases and applies velocity-obstacle collision-cone reasoning to produce safe, predictable, and socially compliant motion.
+
+The system is evaluated through a series of controlled simulation scenarios across 14 Gazebo worlds, demonstrating correct behaviour for static obstruction, head-on approach, path crossing, same-direction following, and fast-from-behind encounters.
+
+
+\section{System Overview}
+
+The SCAN system drives a TurtleBot3 rover through Gazebo worlds populated with walking human models. Three software layers cooperate in a publisher--subscriber ROS~2 graph:
+
+\begin{enumerate}
+    \item \textbf{Perception layer:} Detects humans from four RGB cameras arranged for 360$^\circ$ coverage (or uses ground-truth injection for controlled experiments), and estimates world-frame position and velocity for each detected person.
+    \item \textbf{Localization layer:} Corrects differential-drive odometry drift by correlative LiDAR scan-matching against a pre-built static occupancy map, publishing a corrected robot pose at approximately 50~Hz.
+    \item \textbf{Planning layer:} Plans a global path using A* search on an edge-weighted grid, then follows it with a social navigation controller that classifies each detected human into one of five interaction cases and adjusts robot speed, heading, or route in real time.
+\end{enumerate}
+
+The planner never allows the robot to enter a human's personal zone (0.8~m radius) and progressively reduces speed inside the social zone (1.5~m radius). When the planned path is threatened by a human, the system reroutes proactively before the encounter or reactively when the robot's social circle overlaps with a human's.
+
+The system supports two operating modes. In \textit{full-stack mode}, the complete perception--localization--planning pipeline runs with five simultaneously moving humans in a 25$\times$25~m room. In \textit{isolated test-case mode}, perception is bypassed with ground-truth injection so that individual social navigation cases can be tested in a controlled arena.
+
+
+\section{System Architecture}
+
+The system is implemented as a ROS~2 Python package (\texttt{ros\_humans\_ros2}) containing 18 registered node entry points. Gazebo Harmonic provides the physics simulation, and \texttt{ros\_gz\_bridge} connects Gazebo topics to the ROS~2 graph via nine parameter bridges (clock, odometry, LiDAR, command velocity, four cameras, and entity pose service).
+
+The core nodes and their responsibilities are:
+
+\begin{itemize}
+    \item \textbf{map\_publisher} --- Loads a pre-generated PGM/YAML occupancy grid and publishes it on \texttt{/map} with transient-local durability.
+    \item \textbf{pointcloud\_mapper} --- Publishes the TF tree (\texttt{map}$\to$\texttt{odom}$\to$\texttt{base\_footprint}$\to$sensors) and converts LiDAR scans to world-frame point clouds.
+    \item \textbf{localization\_node} --- Fuses odometry with correlative scan-matching to publish a corrected \texttt{/robot\_pose}.
+    \item \textbf{move\_humans} --- Animates five human models in Gazebo along predefined waypoint loops and publishes ground-truth \texttt{/detected\_humans} and \texttt{/human\_velocities}.
+    \item \textbf{human\_detector\_red} --- Vision-based human detection using HSV colour thresholding with Kalman filter tracking (used in camera mode).
+    \item \textbf{global\_planner} --- Builds a \texttt{WeightedGrid} from \texttt{/map}, runs A* search, and handles both proactive and reactive replanning around humans.
+    \item \textbf{social\_nav\_planner} --- The primary controller: classifies each human encounter, computes collision cones, adjusts speed and heading, and publishes \texttt{/cmd\_vel}.
+    \item \textbf{live\_visualization\_node} --- Publishes ground-truth vs.\ perception occupancy grids and proxemic zone markers for RViz comparison.
+\end{itemize}
+
+Communication between nodes occurs through 25+ ROS~2 topics. The key data flow is: Gazebo publishes sensor data (\texttt{/odom}, \texttt{/scan}, \texttt{/camera/*}); the localization node corrects the pose; the perception layer detects humans; the global planner computes a path on the weighted grid; and the social navigation planner follows the path while respecting social constraints, sending velocity commands back to Gazebo via \texttt{/cmd\_vel}.
+
+
+\section{Perception Pipeline}
+
+Human detection is performed by the \texttt{human\_detector\_red} node, which processes feeds from four RGB cameras mounted on the robot. Each camera covers a 90$^\circ$ horizontal field of view, providing full 360$^\circ$ azimuthal coverage (front, right, back, left).
+
+The detection pipeline for each camera frame proceeds as follows:
+
+\begin{enumerate}
+    \item \textbf{Colour space conversion:} The BGR image is converted to HSV.
+    \item \textbf{Red thresholding:} Two HSV ranges capture the red hue of human models (H $\approx 0$--$10$ and H $\approx 170$--$180$, with high saturation and value).
+    \item \textbf{Morphological filtering:} Opening and closing operations remove noise and fill gaps in the detection mask.
+    \item \textbf{Contour extraction:} Contours are found and filtered by minimum area (40~px$^2$) to reject false positives.
+    \item \textbf{Range estimation:} The apparent size of each contour is mapped to a distance estimate using a pinhole camera model:
+    \begin{equation}
+        d = \frac{f \cdot H_{\text{real}}}{h_{\text{px}}}
+    \end{equation}
+    where $f$ is the focal length in pixels, $H_{\text{real}}$ is the known human height, and $h_{\text{px}}$ is the contour height in pixels.
+    \item \textbf{Bearing estimation:} The horizontal position of the contour centroid is converted to an angular bearing using the camera's horizontal field of view.
+    \item \textbf{World-frame projection:} The (bearing, range) pair is transformed into world coordinates $(x, y)$ using the robot's current corrected pose from \texttt{/robot\_pose}.
+\end{enumerate}
+
+An optional LiDAR fusion step improves range accuracy: when a LiDAR ray aligns with a camera detection bearing (within $\pm 0.15$~rad), the more accurate LiDAR range replaces the pinhole estimate.
+
+
+\section{Human Tracking}
+
+Raw detections from the perception pipeline are noisy and intermittent. To produce stable position and velocity estimates, each detected human is assigned to a \textbf{Kalman filter tracker} (\texttt{KalmanTrackedTarget}).
+
+The state vector is $\mathbf{x} = [x, y, v_x, v_y]^\top$, representing the human's position and velocity in the world frame. The measurement vector observes position only: $\mathbf{z} = [x, y]^\top$. The constant-velocity motion model is:
+
+\begin{equation}
+    \mathbf{x}_{k+1} = \mathbf{F} \, \mathbf{x}_k + \mathbf{w}_k, \quad
+    \mathbf{F} = \begin{bmatrix} 1 & 0 & \Delta t & 0 \\ 0 & 1 & 0 & \Delta t \\ 0 & 0 & 1 & 0 \\ 0 & 0 & 0 & 1 \end{bmatrix}
+\end{equation}
+
+where $\Delta t$ is the time step and $\mathbf{w}_k$ is process noise. The measurement matrix is $\mathbf{H} = [I_{2 \times 2} \mid 0_{2 \times 2}]$. The standard Kalman predict--update cycle runs for each detection.
+
+To handle sensor noise, the tracker rejects implausible velocity jumps exceeding 1.5~m/s between consecutive updates. Detections are associated with existing tracks using nearest-neighbour distance, and tracks that receive no update for a configurable timeout are removed. The resulting filtered positions and velocities are published on \texttt{/detected\_humans} and \texttt{/human\_velocities} as \texttt{PoseArray} messages consumed by the planning layer.
+
+
+\section{Localization}
+
+The TurtleBot3's differential-drive odometry accumulates significant drift over time, particularly in heading. The \texttt{localization\_node} corrects this drift using \textbf{correlative scan matching} against the pre-built static occupancy map.
+
+The algorithm operates as follows:
+
+\begin{enumerate}
+    \item Raw odometry provides fast pose updates at approximately 50~Hz.
+    \item Every 0.5~s, a correlative scan matcher searches a window of $\pm 0.6$~m in translation and $\pm 0.15$~rad in heading around the odometry-predicted pose.
+    \item For each candidate pose $(x + \delta x, \, y + \delta y, \, \theta + \delta\theta)$, up to 120 sub-sampled LiDAR scan endpoints are projected into map coordinates and scored by the number of endpoints that land on occupied cells.
+    \item The candidate with the highest score provides the best correction.
+    \item The correction is \textbf{EMA-filtered} with $\alpha = 0.4$ to prevent single-match teleportation:
+    \begin{equation}
+        \mathbf{c}_k = \alpha \cdot \mathbf{c}_{\text{new}} + (1 - \alpha) \cdot \mathbf{c}_{k-1}
+    \end{equation}
+    \item Per-step clamps (0.15~m, 0.05~rad) and a total correction clamp (1.0~m) prevent runaway drift.
+\end{enumerate}
+
+The node publishes two pose topics: \texttt{/robot\_pose} (corrected) and \texttt{/robot\_pose\_gt} (raw odometry only), enabling quantitative comparison of localization accuracy.
+
+
+\section{Mapping and Environment Representation}
+
+The system uses pre-built occupancy grid maps rather than online SLAM. Maps are generated offline by the \texttt{world\_to\_map} converter, which parses a Gazebo SDF \texttt{.world} file and rasterizes each collision geometry (boxes, cylinders, spheres, cones, with rotation support) onto a NumPy grid. The output is a standard ROS~2 \texttt{map\_server}-compatible PGM image paired with a YAML descriptor specifying resolution and origin.
+
+The \texttt{map\_publisher} node loads this PGM/YAML pair and publishes it on \texttt{/map} as an \texttt{OccupancyGrid} message with transient-local durability, ensuring that late-joining subscribers receive the map immediately.
+
+The global planner further processes the map by constructing a \texttt{WeightedGrid} --- an 8-connected graph where each cell carries two cost factors:
+
+\begin{itemize}
+    \item \textbf{Base weight:} A static safety cost derived from obstacle proximity, computed via inflation with exponential falloff. Cells within 0.5~m of an obstacle are treated as impassable (lethal zone). The inflation radius is configurable (default 0.35~m).
+    \item \textbf{Dynamic weight:} A human-avoidance cost that starts at 1.0 and is increased in zones around detected humans. This weight is updated in real time by the social navigation planner.
+\end{itemize}
+
+The edge cost between adjacent cells $A$ and $B$ is:
+\begin{equation}
+    c(A \to B) = d(A,B) \times w_{\text{base}}(B) \times w_{\text{dynamic}}(B)
+\end{equation}
+where $d(A,B)$ is the Euclidean move distance (1.0 for cardinal, $\sqrt{2}$ for diagonal).
+
+
+\section{Global Path Planning}
+
+The \texttt{global\_planner} node performs A* search on the \texttt{WeightedGrid} using an octile-distance heuristic (consistent and admissible for 8-connected grids):
+
+\begin{equation}
+    h(n) = \max(|\Delta x|, |\Delta y|) + (\sqrt{2} - 1) \cdot \min(|\Delta x|, |\Delta y|)
+\end{equation}
+
+where $\Delta x$ and $\Delta y$ are the cell-coordinate differences between node $n$ and the goal. The resulting grid path is simplified by line-of-sight pruning (removing A* staircase artifacts) and corner smoothing, then published as a \texttt{nav\_msgs/Path} on \texttt{/global\_path}.
+
+The planner supports two replanning mechanisms:
+
+\textbf{Proactive replanning} (1~Hz): The global planner continuously monitors whether any detected human --- at their current position or velocity-predicted future position (3~s horizon) --- comes within 0.75~m of any segment of the remaining path. If a threat is detected, weight zones are built around the human's position and predicted trajectory, and A* is re-run from the robot's current position.
+
+\textbf{Reactive replanning}: When the social navigation planner detects that the robot's path enters a human's social circle, it publishes weight zones on \texttt{/weight\_zones} and sends a \texttt{/replan\_request}. The global planner applies these zones with radial falloff:
+\begin{equation}
+    w_{\text{cell}} = 1.0 + (m - 1.0) \times \left(1 - \frac{d_{\text{cell}}}{r}\right)
+\end{equation}
+where $m$ is the weight multiplier, $r$ is the zone radius, and $d_{\text{cell}}$ is the cell's distance from the zone centre. A* then naturally routes around high-cost zones.
+
+After each replan, deviation analysis computes path overlap with the previous route to distinguish minor adjustments from full reroutes.
+
+
+\section{Local Navigation}
+
+The \texttt{social\_nav\_planner} node serves as the primary local navigation controller, running at 10~Hz. It follows the global path published by the global planner using waypoint tracking with a tolerance of 0.3~m. The robot steers toward the next waypoint using proportional angular control and maintains a configurable maximum linear speed of 0.3~m/s.
+
+A LiDAR-based emergency stop provides a safety net: if any scan ray within a $\pm 30^\circ$ forward arc measures less than 0.35~m, the robot halts immediately regardless of the planner's speed command.
+
+When no humans are nearby, the controller simply follows waypoints at full speed. When humans are detected, the case-based social navigation framework (described next) modulates both speed and heading.
+
+
+\section{Social Navigation Framework}
+
+The social navigation framework is grounded in Hall's theory of proxemic zones~\cite{hall1966hidden}, which describes the concentric spatial regions humans maintain during interaction. The system defines three zones around each detected human:
+
+\begin{itemize}
+    \item \textbf{Collision zone} ($r_c = 0.5$~m): Combined robot and human body radii. Entry here represents a collision.
+    \item \textbf{Personal zone} ($r_p = 0.8$~m): Intimate space. The robot crawls at 0.02~m/s if it enters this zone.
+    \item \textbf{Social zone} ($r_s = 1.5$~m): Conversational distance. The robot progressively reduces speed within this zone, scaled by $v_{\max} \times (d / r_s)$.
+\end{itemize}
+
+These zones are visualized in RViz as concentric rings around each human (orange for personal, blue for social). The social navigation planner uses velocity-obstacle (VO) collision cones to reason about future conflicts: given the robot's and human's current positions and velocities, a collision cone defines the set of robot velocities that would lead to intersection within the social radius. The cone's angular extent determines whether a conflict exists, and the entry/exit times inform speed adjustments.
+
+
+\section{Human Interaction Cases}
+
+The \texttt{social\_nav\_planner} classifies each detected human into one of five behavioural cases based on their motion state, heading alignment, and spatial relationship to the robot. The classification pipeline runs per human, per tick:
+
+\begin{enumerate}
+    \item Compute distance, relative position, and human speed.
+    \item If speed $< 0.05$~m/s $\to$ \textbf{Case~1} (stationary).
+    \item Compute collision cone (velocity obstacle).
+    \item If heading similarity $\cos(\Delta\theta) > 0.70$ $\to$ same direction $\to$ \textbf{Case~4} or \textbf{Case~5}.
+    \item If approach rate $> 0.15$~m/s with opposing velocity $\to$ \textbf{Case~2} (head-on).
+    \item Default $\to$ \textbf{Case~3} (crossing).
+\end{enumerate}
+
+When multiple humans are present, the planner selects the highest-priority action: emergency stops take precedence, followed by Case~1, Case~2, Case~5, Case~3 (conflict), Case~4, and finally Case~3 (safe).
+
+\subsection{Case 1: Static Human Blocking Path}
+
+When a human is detected with speed below 0.05~m/s on or near the planned path, the planner publishes a weight zone (radius 1.2~m, weight $20\times$) around the human and requests an A* reroute from the global planner. The robot crawls if within the personal zone (0.8~m) and slows proportionally within the social zone (1.5~m). Once the rerouted path no longer passes through the human's zone, the robot proceeds at normal speed.
+
+
+\subsection{Case 2: Head-On Interaction}
+
+A head-on encounter is detected when the human's approach rate exceeds 0.15~m/s and the velocity component opposing the robot's heading is below $-0.15$~m/s. The robot's speed is scaled inversely with both the human's velocity and the closing distance. Weight zones are published along the human's predicted trajectory with a pass-side bias so the global planner can reroute to one side. A full stop is commanded within the personal zone.
+
+
+\subsection{Case 3: Crossing Human}
+
+For humans crossing the robot's path (the default case for moving, non-aligned humans), the planner computes a collision cone and calculates the time $t_{\text{clear}}$ for the human's personal zone to fully clear the crossing point. The robot's safe speed is set so that it arrives after the human has passed:
+
+\begin{equation}
+    v_{\text{safe}} = \frac{d_{\text{crossing}}}{t_{\text{clear}} + t_{\text{buf}}}
+\end{equation}
+
+where $d_{\text{crossing}}$ is the distance to the crossing point and $t_{\text{buf}} = 2.5$~s is a safety buffer. Faster crossing humans cause the robot to slow more aggressively. The social-radius collision cone provides defence in depth even when timing calculations indicate safety.
+
+
+\subsection{Case 4: Same Direction Motion}
+
+Two sub-cases are handled:
+
+\textbf{Case 4a --- Human ahead, same direction (no overtake):} When heading similarity exceeds 0.70 and the human is ahead, the robot matches the human's speed $\times 0.95$ within 2.0~m. No overtaking is attempted.
+
+\textbf{Case 4b/5 --- Fast human from behind:} When a human behind the robot moves faster in the same direction (relative speed $> 0.15$~m/s), the robot slows down and applies a lateral angular nudge of 0.25--0.30~rad to yield passage. Weight zones along the human's trajectory trigger a potential global reroute.
+
+
+\section{Experimental Setup}
+
+All experiments are conducted in the Gazebo Harmonic simulator with ROS~2 Jazzy on Ubuntu 24.04. The robot platform is a simulated TurtleBot3 rover equipped with a 360$^\circ$ LiDAR and four 90$^\circ$ RGB cameras.
+
+\textbf{Full-stack testing} uses the \texttt{large\_messy\_room} world (25$\times$25~m) populated with furniture, walls, and five simultaneously moving human models. Each human follows a predefined waypoint loop designed to trigger a specific social case:
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}llll@{}}
+\toprule
+\textbf{Human} & \textbf{Speed} & \textbf{Behaviour} & \textbf{Case} \\
+\midrule
+human\_1 & 0.03 m/s & Near-stationary blocker & Case 1 \\
+human\_2 & 0.35 m/s & North--south oscillation & Case 2 \\
+human\_3 & 0.45 m/s & East--west crossing & Case 3 \\
+human\_4 & 0.22 m/s & NE diagonal, slower & Case 4a \\
+human\_5 & 0.58 m/s & Northward, faster & Case 5 \\
+\bottomrule
+\end{tabular}
+\caption{Human model configurations in the full-stack test environment.}
+\label{tab:humans}
+\end{table}
+
+\textbf{Isolated test-case mode} uses the \texttt{test\_case\_arena} world ($\sim$10$\times$10~m), a small symmetric arena where a single human is animated by the \texttt{human\_case\_controller} node with exact start position and velocity. This mode bypasses perception entirely, using ground-truth injection to isolate the planning layer's behaviour. Ten test configurations are available: case1 through case5, plus four diagonal variants (case6a--d).
+
+
+\section{Experimental Results}
+
+The system was tested across all five primary social navigation cases and the four diagonal variants. In each scenario, the robot was commanded to navigate to a goal position while one or more humans moved according to the prescribed patterns.
+
+\textbf{Case 1 (Static Blocker):} The robot detected the stationary human on its path, published weight zones, and received a rerouted path from the global planner. The robot successfully navigated around the human while maintaining a minimum distance exceeding the personal zone radius (0.8~m).
+
+\textbf{Case 2 (Head-On):} When a human approached from the opposite direction, the robot progressively reduced speed and the global planner rerouted the path to one side using trajectory-based weight zones. The robot yielded passage without entering the human's personal zone.
+
+\textbf{Case 3 (Crossing):} The collision-cone computation correctly identified the crossing conflict, and the robot slowed to let the human pass first. The crossing-time calculation with the 2.5~s safety buffer ensured the robot arrived at the crossing point after the human had cleared it.
+
+\textbf{Case 4a (Ahead, Same Direction):} The robot matched the slower human's speed within the overtake warning distance (2.0~m) and followed without attempting to pass, maintaining a socially comfortable following distance.
+
+\textbf{Case 5 (Fast From Behind):} The robot slowed and applied a lateral angular nudge to yield the right of way. The faster human passed safely while the robot maintained its heading toward the goal.
+
+In the full-stack scenario with five simultaneous humans, the system correctly prioritised interactions and handled multiple overlapping social cases. The proactive replanning mechanism (1~Hz) successfully anticipated several encounters before they occurred, reducing the number of emergency reactive replans.
+
+
+\section{Discussion}
+
+The SCAN system demonstrates that case-based social navigation with velocity-obstacle reasoning can produce safe and predictable robot behaviour in environments with multiple moving humans. The layered speed computation stack --- per-case handler, proximity cap, collision-cone cap, personal zone guard --- provides defence in depth against unsafe interactions.
+
+The proactive replanning mechanism is particularly effective: by monitoring the entire remaining path against human positions and predicted trajectories, the global planner reroutes before the robot reaches a conflict zone, producing smoother and more natural motion than purely reactive approaches.
+
+Several limitations remain. The perception system relies on red-colour thresholding, which is specific to the human models used in simulation and would not generalise to real-world scenarios without a more robust detection method. The scan-matching localization, while effective in structured environments, may degrade in featureless areas. The system currently does not model group behaviour or social forces between humans.
+
+The system also operates under simulation-specific assumptions: perfect sensor models, deterministic human motion, and known map geometry. Transferring to physical hardware would require addressing sensor noise, communication latency, and dynamic mapping.
+
+
+\section{Conclusion}
+
+This project presented SCAN, a complete socially compliant autonomous navigation system for mobile robots operating in human-populated environments. The system integrates vision-based human detection with Kalman filter tracking, correlative scan-matched localization, A* global path planning on dynamically weighted grids, and a case-based social navigation controller that classifies human interactions into five behavioural cases.
+
+The key contributions are: (1)~a velocity-obstacle collision-cone framework for real-time social case classification, (2)~a dual proactive--reactive replanning architecture that anticipates human encounters before they occur, (3)~a layered speed computation stack that enforces proxemic zone constraints, and (4)~a comprehensive simulation testbed with 14 Gazebo worlds and 10 configurable test scenarios.
+
+Future work could extend the system with learning-based human detection (e.g.\ YOLO), predictive human motion models using social force or trajectory forecasting, multi-robot coordination, and deployment on physical TurtleBot3 hardware with real sensor data.
+
+
+\begin{thebibliography}{9}
+
+\bibitem{hall1966hidden}
+E.~T. Hall, \textit{The Hidden Dimension}. Doubleday, 1966.
+
+\bibitem{ros2jazzy}
+Open Robotics, ``ROS~2 Jazzy Jalisco,'' 2024. [Online]. Available: \url{https://docs.ros.org/en/jazzy/}
+
+\bibitem{hart1968astar}
+P.~E. Hart, N.~J. Nilsson, and B.~Raphael, ``A formal basis for the heuristic determination of minimum cost paths,'' \textit{IEEE Trans.\ Syst.\ Sci.\ Cybern.}, vol.~4, no.~2, pp.~100--107, 1968.
+
+\bibitem{fiorini1998vo}
+P.~Fiorini and Z.~Shiller, ``Motion planning in dynamic environments using velocity obstacles,'' \textit{Int.\ J.\ Robot.\ Res.}, vol.~17, no.~7, pp.~760--772, 1998.
+
+\bibitem{kruse2013survey}
+T.~Kruse, A.~K. Pandey, R.~Alami, and A.~Kirsch, ``Human-aware robot navigation: A survey,'' \textit{Robot.\ Auton.\ Syst.}, vol.~61, no.~12, pp.~1726--1743, 2013.
+
+\bibitem{mavrogiannis2023socialnav}
+C.~Mavrogiannis, F.~Baldini, A.~Wang, D.~Zhao, P.~Trautman, A.~Steinfeld, and J.~Oh, ``Core challenges of social robot navigation: A survey,'' \textit{ACM Trans.\ Hum.-Robot Interact.}, vol.~12, no.~3, pp.~1--39, 2023.
+
+\bibitem{turtlebot3}
+ROBOTIS, ``TurtleBot3,'' 2023. [Online]. Available: \url{https://emanual.robotis.com/docs/en/platform/turtlebot3/overview/}
+
+\bibitem{gazeboharmonic}
+Open Robotics, ``Gazebo Harmonic,'' 2024. [Online]. Available: \url{https://gazebosim.org/}
+
+\bibitem{kalman1960}
+R.~E. Kalman, ``A new approach to linear filtering and prediction problems,'' \textit{J.\ Basic Eng.}, vol.~82, no.~1, pp.~35--45, 1960.
+
+\end{thebibliography}
+
+
+\end{document}

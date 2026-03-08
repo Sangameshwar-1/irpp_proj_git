@@ -500,196 +500,6 @@
       </link>
     </model>
 
-    <!-- Debris piles -->
-    <model name="debris_pile_1">
-      <static>true</static>
-      <link name="link">
-        <pose>-4 -10 0.2 0 0 0</pose>
-        <collision name="collision">
-          <geometry>
-            <box><size>2.0 1.5 0.4</size></box>
-          </geometry>
-        </collision>
-        <visual name="visual">
-          <geometry>
-            <box><size>2.0 1.5 0.4</size></box>
-          </geometry>
-          <material>
-            <ambient>0.35 0.3 0.25 1</ambient>
-            <diffuse>0.4 0.35 0.3 1</diffuse>
-          </material>
-        </visual>
-      </link>
-    </model>
-
-    <model name="debris_pile_2">
-      <static>true</static>
-      <link name="link">
-        <pose>6 10 0.25 0 0 0.2</pose>
-        <collision name="collision">
-          <geometry>
-            <box><size>1.8 1.2 0.5</size></box>
-          </geometry>
-        </collision>
-        <visual name="visual">
-          <geometry>
-            <box><size>1.8 1.2 0.5</size></box>
-          </geometry>
-          <material>
-            <ambient>0.4 0.35 0.3 1</ambient>
-            <diffuse>0.45 0.4 0.35 1</diffuse>
-          </material>
-        </visual>
-      </link>
-    </model>
-
-    <!-- Cones -->
-    <model name="cone_1">
-      <static>true</static>
-      <link name="link">
-        <pose>1 -7 0.3 0 0 0</pose>
-        <collision name="collision">
-          <geometry>
-            <cone>
-              <radius>0.25</radius>
-              <length>0.6</length>
-            </cone>
-          </geometry>
-        </collision>
-        <visual name="visual">
-          <geometry>
-            <cone>
-              <radius>0.25</radius>
-              <length>0.6</length>
-            </cone>
-          </geometry>
-          <material>
-            <ambient>1.0 0.5 0.0 1</ambient>
-            <diffuse>1.0 0.55 0.1 1</diffuse>
-          </material>
-        </visual>
-      </link>
-    </model>
-
-    <model name="cone_2">
-      <static>true</static>
-      <link name="link">
-        <pose>-7 7 0.3 0 0 0</pose>
-        <collision name="collision">
-          <geometry>
-            <cone>
-              <radius>0.25</radius>
-              <length>0.6</length>
-            </cone>
-          </geometry>
-        </collision>
-        <visual name="visual">
-          <geometry>
-            <cone>
-              <radius>0.25</radius>
-              <length>0.6</length>
-            </cone>
-          </geometry>
-          <material>
-            <ambient>1.0 0.5 0.0 1</ambient>
-            <diffuse>1.0 0.55 0.1 1</diffuse>
-          </material>
-        </visual>
-      </link>
-    </model>
-
-    <!-- Fallen pillar -->
-    <model name="fallen_pillar">
-      <static>true</static>
-      <link name="link">
-        <pose>4 -9 0.3 1.4 0 0.3</pose>
-        <collision name="collision">
-          <geometry>
-            <cylinder>
-              <radius>0.3</radius>
-              <length>2.5</length>
-            </cylinder>
-          </geometry>
-        </collision>
-        <visual name="visual">
-          <geometry>
-            <cylinder>
-              <radius>0.3</radius>
-              <length>2.5</length>
-            </cylinder>
-          </geometry>
-          <material>
-            <ambient>0.5 0.5 0.5 1</ambient>
-            <diffuse>0.55 0.55 0.55 1</diffuse>
-          </material>
-        </visual>
-      </link>
-    </model>
-
-    <!-- Small rubble blocks -->
-    <model name="rubble_1">
-      <static>true</static>
-      <link name="link">
-        <pose>-10 5 0.15 0.2 0.1 0.5</pose>
-        <collision name="collision">
-          <geometry>
-            <box><size>0.5 0.4 0.3</size></box>
-          </geometry>
-        </collision>
-        <visual name="visual">
-          <geometry>
-            <box><size>0.5 0.4 0.3</size></box>
-          </geometry>
-          <material>
-            <ambient>0.45 0.4 0.35 1</ambient>
-            <diffuse>0.5 0.45 0.4 1</diffuse>
-          </material>
-        </visual>
-      </link>
-    </model>
-
-    <model name="rubble_2">
-      <static>true</static>
-      <link name="link">
-        <pose>10 -8 0.2 0.1 0.2 0.3</pose>
-        <collision name="collision">
-          <geometry>
-            <box><size>0.6 0.5 0.4</size></box>
-          </geometry>
-        </collision>
-        <visual name="visual">
-          <geometry>
-            <box><size>0.6 0.5 0.4</size></box>
-          </geometry>
-          <material>
-            <ambient>0.42 0.38 0.33 1</ambient>
-            <diffuse>0.47 0.43 0.38 1</diffuse>
-          </material>
-        </visual>
-      </link>
-    </model>
-
-    <model name="rubble_3">
-      <static>true</static>
-      <link name="link">
-        <pose>5 2 0.15 0.15 -0.1 0.7</pose>
-        <collision name="collision">
-          <geometry>
-            <box><size>0.4 0.35 0.3</size></box>
-          </geometry>
-        </collision>
-        <visual name="visual">
-          <geometry>
-            <box><size>0.4 0.35 0.3</size></box>
-          </geometry>
-          <material>
-            <ambient>0.48 0.43 0.38 1</ambient>
-            <diffuse>0.53 0.48 0.43 1</diffuse>
-          </material>
-        </visual>
-      </link>
-    </model>
-
     <!-- ==================== STATIC HUMANS ==================== -->
     <!-- Standing person near wall -->
     <model name="human_static_1">
@@ -712,8 +522,8 @@
             </cylinder>
           </geometry>
           <material>
-            <ambient>0.2 0.4 0.7 1</ambient>
-            <diffuse>0.25 0.45 0.75 1</diffuse>
+            <ambient>0.55 0.45 0.35 1</ambient>
+            <diffuse>0.6 0.5 0.4 1</diffuse>
           </material>
         </visual>
         <!-- Head -->
@@ -725,8 +535,8 @@
             </sphere>
           </geometry>
           <material>
-            <ambient>0.9 0.75 0.6 1</ambient>
-            <diffuse>0.95 0.8 0.65 1</diffuse>
+            <ambient>1.0 0.0 0.0 1</ambient>
+            <diffuse>1.0 0.0 0.0 1</diffuse>
           </material>
         </visual>
       </link>
@@ -753,8 +563,8 @@
             </cylinder>
           </geometry>
           <material>
-            <ambient>0.7 0.3 0.3 1</ambient>
-            <diffuse>0.75 0.35 0.35 1</diffuse>
+            <ambient>0.55 0.45 0.35 1</ambient>
+            <diffuse>0.6 0.5 0.4 1</diffuse>
           </material>
         </visual>
         <visual name="head">
@@ -765,8 +575,8 @@
             </sphere>
           </geometry>
           <material>
-            <ambient>0.9 0.75 0.6 1</ambient>
-            <diffuse>0.95 0.8 0.65 1</diffuse>
+            <ambient>1.0 0.0 0.0 1</ambient>
+            <diffuse>1.0 0.0 0.0 1</diffuse>
           </material>
         </visual>
       </link>
@@ -793,8 +603,8 @@
             </cylinder>
           </geometry>
           <material>
-            <ambient>0.3 0.6 0.4 1</ambient>
-            <diffuse>0.35 0.65 0.45 1</diffuse>
+            <ambient>0.55 0.45 0.35 1</ambient>
+            <diffuse>0.6 0.5 0.4 1</diffuse>
           </material>
         </visual>
         <visual name="head">
@@ -805,8 +615,8 @@
             </sphere>
           </geometry>
           <material>
-            <ambient>0.85 0.7 0.55 1</ambient>
-            <diffuse>0.9 0.75 0.6 1</diffuse>
+            <ambient>1.0 0.0 0.0 1</ambient>
+            <diffuse>1.0 0.0 0.0 1</diffuse>
           </material>
         </visual>
       </link>
@@ -842,8 +652,8 @@
             </cylinder>
           </geometry>
           <material>
-            <ambient>1.0 0.5 0.2 1</ambient>
-            <diffuse>1.0 0.55 0.25 1</diffuse>
+            <ambient>0.55 0.45 0.35 1</ambient>
+            <diffuse>0.6 0.5 0.4 1</diffuse>
           </material>
         </visual>
         <visual name="head">
@@ -854,8 +664,8 @@
             </sphere>
           </geometry>
           <material>
-            <ambient>0.9 0.75 0.6 1</ambient>
-            <diffuse>0.95 0.8 0.65 1</diffuse>
+            <ambient>1.0 0.0 0.0 1</ambient>
+            <diffuse>1.0 0.0 0.0 1</diffuse>
           </material>
         </visual>
       </link>
@@ -890,8 +700,8 @@
             </cylinder>
           </geometry>
           <material>
-            <ambient>0.9 0.2 0.5 1</ambient>
-            <diffuse>0.95 0.25 0.55 1</diffuse>
+            <ambient>0.55 0.45 0.35 1</ambient>
+            <diffuse>0.6 0.5 0.4 1</diffuse>
           </material>
         </visual>
         <visual name="head">
@@ -902,8 +712,8 @@
             </sphere>
           </geometry>
           <material>
-            <ambient>0.85 0.7 0.55 1</ambient>
-            <diffuse>0.9 0.75 0.6 1</diffuse>
+            <ambient>1.0 0.0 0.0 1</ambient>
+            <diffuse>1.0 0.0 0.0 1</diffuse>
           </material>
         </visual>
       </link>
@@ -938,8 +748,8 @@
             </cylinder>
           </geometry>
           <material>
-            <ambient>0.3 0.7 0.9 1</ambient>
-            <diffuse>0.35 0.75 0.95 1</diffuse>
+            <ambient>0.55 0.45 0.35 1</ambient>
+            <diffuse>0.6 0.5 0.4 1</diffuse>
           </material>
         </visual>
         <visual name="head">
@@ -950,8 +760,8 @@
             </sphere>
           </geometry>
           <material>
-            <ambient>0.9 0.75 0.6 1</ambient>
-            <diffuse>0.95 0.8 0.65 1</diffuse>
+            <ambient>1.0 0.0 0.0 1</ambient>
+            <diffuse>1.0 0.0 0.0 1</diffuse>
           </material>
         </visual>
       </link>
@@ -986,8 +796,8 @@
             </cylinder>
           </geometry>
           <material>
-            <ambient>0.8 0.8 0.2 1</ambient>
-            <diffuse>0.85 0.85 0.25 1</diffuse>
+            <ambient>0.55 0.45 0.35 1</ambient>
+            <diffuse>0.6 0.5 0.4 1</diffuse>
           </material>
         </visual>
         <visual name="head">
@@ -998,8 +808,8 @@
             </sphere>
           </geometry>
           <material>
-            <ambient>0.85 0.7 0.55 1</ambient>
-            <diffuse>0.9 0.75 0.6 1</diffuse>
+            <ambient>1.0 0.0 0.0 1</ambient>
+            <diffuse>1.0 0.0 0.0 1</diffuse>
           </material>
         </visual>
       </link>
@@ -1034,8 +844,8 @@
             </cylinder>
           </geometry>
           <material>
-            <ambient>0.6 0.3 0.7 1</ambient>
-            <diffuse>0.65 0.35 0.75 1</diffuse>
+            <ambient>0.55 0.45 0.35 1</ambient>
+            <diffuse>0.6 0.5 0.4 1</diffuse>
           </material>
         </visual>
         <visual name="head">
@@ -1046,8 +856,8 @@
             </sphere>
           </geometry>
           <material>
-            <ambient>0.9 0.75 0.6 1</ambient>
-            <diffuse>0.95 0.8 0.65 1</diffuse>
+            <ambient>1.0 0.0 0.0 1</ambient>
+            <diffuse>1.0 0.0 0.0 1</diffuse>
           </material>
         </visual>
       </link>
@@ -1523,158 +1333,6 @@
     </model>
 
     <!-- ==================== ADDITIONAL FURNITURE/OBSTACLES ==================== -->
-    <!-- Table 1 -->
-    <model name="table_1">
-      <static>true</static>
-      <pose>-7 -6 0 0 0 0.2</pose>
-      <link name="table_top">
-        <pose>0 0 0.75 0 0 0</pose>
-        <collision name="collision">
-          <geometry>
-            <box><size>1.2 0.8 0.05</size></box>
-          </geometry>
-        </collision>
-        <visual name="visual">
-          <geometry>
-            <box><size>1.2 0.8 0.05</size></box>
-          </geometry>
-          <material>
-            <ambient>0.55 0.35 0.2 1</ambient>
-            <diffuse>0.6 0.4 0.25 1</diffuse>
-          </material>
-        </visual>
-      </link>
-      <link name="leg1">
-        <pose>0.5 0.3 0.375 0 0 0</pose>
-        <collision name="collision">
-          <geometry>
-            <cylinder><radius>0.04</radius><length>0.75</length></cylinder>
-          </geometry>
-        </collision>
-        <visual name="visual">
-          <geometry>
-            <cylinder><radius>0.04</radius><length>0.75</length></cylinder>
-          </geometry>
-          <material>
-            <ambient>0.4 0.25 0.15 1</ambient>
-            <diffuse>0.45 0.3 0.2 1</diffuse>
-          </material>
-        </visual>
-      </link>
-      <link name="leg2">
-        <pose>-0.5 0.3 0.375 0 0 0</pose>
-        <collision name="collision">
-          <geometry>
-            <cylinder><radius>0.04</radius><length>0.75</length></cylinder>
-          </geometry>
-        </collision>
-        <visual name="visual">
-          <geometry>
-            <cylinder><radius>0.04</radius><length>0.75</length></cylinder>
-          </geometry>
-          <material>
-            <ambient>0.4 0.25 0.15 1</ambient>
-            <diffuse>0.45 0.3 0.2 1</diffuse>
-          </material>
-        </visual>
-      </link>
-      <link name="leg3">
-        <pose>0.5 -0.3 0.375 0 0 0</pose>
-        <collision name="collision">
-          <geometry>
-            <cylinder><radius>0.04</radius><length>0.75</length></cylinder>
-          </geometry>
-        </collision>
-        <visual name="visual">
-          <geometry>
-            <cylinder><radius>0.04</radius><length>0.75</length></cylinder>
-          </geometry>
-          <material>
-            <ambient>0.4 0.25 0.15 1</ambient>
-            <diffuse>0.45 0.3 0.2 1</diffuse>
-          </material>
-        </visual>
-      </link>
-      <link name="leg4">
-        <pose>-0.5 -0.3 0.375 0 0 0</pose>
-        <collision name="collision">
-          <geometry>
-            <cylinder><radius>0.04</radius><length>0.75</length></cylinder>
-          </geometry>
-        </collision>
-        <visual name="visual">
-          <geometry>
-            <cylinder><radius>0.04</radius><length>0.75</length></cylinder>
-          </geometry>
-          <material>
-            <ambient>0.4 0.25 0.15 1</ambient>
-            <diffuse>0.45 0.3 0.2 1</diffuse>
-          </material>
-        </visual>
-      </link>
-    </model>
-
-    <!-- Chair 1 -->
-    <model name="chair_1">
-      <static>true</static>
-      <pose>9 -10 0 0 0 0.5</pose>
-      <link name="seat">
-        <pose>0 0 0.45 0 0 0</pose>
-        <collision name="collision">
-          <geometry>
-            <box><size>0.45 0.45 0.05</size></box>
-          </geometry>
-        </collision>
-        <visual name="visual">
-          <geometry>
-            <box><size>0.45 0.45 0.05</size></box>
-          </geometry>
-          <material>
-            <ambient>0.5 0.3 0.2 1</ambient>
-            <diffuse>0.55 0.35 0.25 1</diffuse>
-          </material>
-        </visual>
-      </link>
-      <link name="back">
-        <pose>-0.2 0 0.7 0 0 0</pose>
-        <collision name="collision">
-          <geometry>
-            <box><size>0.05 0.45 0.5</size></box>
-          </geometry>
-        </collision>
-        <visual name="visual">
-          <geometry>
-            <box><size>0.05 0.45 0.5</size></box>
-          </geometry>
-          <material>
-            <ambient>0.5 0.3 0.2 1</ambient>
-            <diffuse>0.55 0.35 0.25 1</diffuse>
-          </material>
-        </visual>
-      </link>
-    </model>
-
-    <!-- Chair 2 (knocked over) -->
-    <model name="chair_2_fallen">
-      <static>true</static>
-      <pose>-9 2 0.25 1.2 0 0.8</pose>
-      <link name="seat">
-        <collision name="collision">
-          <geometry>
-            <box><size>0.45 0.45 0.05</size></box>
-          </geometry>
-        </collision>
-        <visual name="visual">
-          <geometry>
-            <box><size>0.45 0.45 0.05</size></box>
-          </geometry>
-          <material>
-            <ambient>0.45 0.28 0.18 1</ambient>
-            <diffuse>0.5 0.33 0.23 1</diffuse>
-          </material>
-        </visual>
-      </link>
-    </model>
 
     <!-- Bookshelf -->
     <model name="bookshelf">
