@@ -142,11 +142,15 @@ def _launch_setup(context, *args, **kwargs):
 
         # move_humans — publishes /human_ground_truth
         # Static humans: empty humans_json means no waypoint movement
+        # publish_detections=False so camera-based human_detector_red is the
+        # sole source of /detected_humans (avoids empty GT messages at 10 Hz
+        # overwriting real camera detections at 5 Hz).
         Node(package="ros_humans_ros2", executable="move_humans",
              name="move_humans", output="screen",
              parameters=[{"rate": 10.0,
                            "world": world_name,
                            "humans_json": "[]",
+                           "publish_detections": False,
                            "use_sim_time": True}]),
 
         # ═══════════════════════════════════════════════════════════
